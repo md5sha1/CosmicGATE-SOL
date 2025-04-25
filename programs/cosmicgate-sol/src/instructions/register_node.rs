@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token_2022::Token2022;
+
 
 use crate::account_data::node::Node;
-
 
 #[derive(Accounts)]
 #[event_cpi]
@@ -11,13 +12,17 @@ pub struct RegisterNode<'info> {
         space = Node::MAX_SIZE,
         seeds = [
             b"node",
-            creator.key().as_ref()
+            mint_account.key().as_ref()
         ],
         bump
     )]
-    pub node:AccountLoader<'info, Node>,
+    pub node: AccountLoader<'info, Node>,
+
+    pub mint_account: Signer<'info>,
 
     #[account(mut)]
-  pub creator: Signer<'info>,
-  pub system_program: Program<'info, System>,
+    pub creator: Signer<'info>,
+
+    pub token_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
 }

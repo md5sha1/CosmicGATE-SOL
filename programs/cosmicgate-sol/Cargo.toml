@@ -18,6 +18,7 @@ idl-build = ["anchor-lang/idl-build"]
 
 [dependencies]
 anchor-lang = { version = "0.30.1", features = ["init-if-needed", "event-cpi"] }
+anchor-spl = "0.30.1"
 anchor-safe-math = "0.5.1"
 rust_decimal = { version = "1.36.0", features = ["maths"] }
 bytemuck = { version = "1.4.0", features = ["derive", "min_const_generics"] }
