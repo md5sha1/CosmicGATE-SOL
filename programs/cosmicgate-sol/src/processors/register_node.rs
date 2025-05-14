@@ -1,4 +1,4 @@
-use crate::{account_data::node::Node, instructions::register_node::RegisterNode, program_error::ErrorCode};
+use crate::{account_data::node::Node, instructions::register_node::RegisterNode};
 use anchor_lang::{
     prelude::*,
     system_program::{create_account, CreateAccount},
