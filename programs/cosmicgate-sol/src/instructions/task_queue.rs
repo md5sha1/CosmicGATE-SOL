@@ -10,6 +10,8 @@ pub struct TaskQueue<'info> {
         space = Task::MAX_SIZE,        
     )]
     pub task_account: AccountLoader<'info, Task>,
+    /// CHECK
+    pub node_id: AccountInfo<'info>,
 
     #[account(mut)]
     pub creator: Signer<'info>,    

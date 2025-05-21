@@ -6,14 +6,16 @@ pub struct TaskEvent {
     pub task: Pubkey,
     pub owner: Pubkey,
     pub node_id: Pubkey,
-    pub price: u64
+    pub price: u64,
 }
 
-pub fn exec(
-    ctx: Context<TaskQueue>,
-    price: u64    
-) -> Result<()> {
+pub fn exec(ctx: Context<TaskQueue>, price: u64) -> Result<()> {
     let task = &mut ctx.accounts.task_account.load_init()?;
-    // **task = Task::new(id, owner, node_id, price)
+    **task = Task::new(
+        ctx.accounts.task_account.key(),
+        ctx.accounts.creator.key(),
+        ctx.accounts.node_id.key(),
+        price,
+    );
     Ok(())
 }

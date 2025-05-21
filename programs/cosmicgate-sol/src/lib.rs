@@ -5,15 +5,14 @@ pub mod processors;
 pub mod program_error;
 use crate::instructions::register_node::*;
 use crate::instructions::task_queue::*;
+use crate::instructions::test_instruct::*;
 use anchor_lang::prelude::*;
 
 declare_id!("Bw542RoLc3equ6jTWZMp7gEJmiakoDTnLrCHc7n5QMgv");
 
 #[program]
 pub mod cosmicgate_sol {
-
-    
-
+        
     use super::*;
     /**
      * Register node and create soulbound NFT and send it to node creator
@@ -35,5 +34,9 @@ pub mod cosmicgate_sol {
 
     pub fn add_task(ctx: Context<TaskQueue>, price: u64) -> Result<()> {
         processors::task_queue::exec(ctx, price)
+    }
+
+    pub fn test(ctx: Context<TestInstruct>, count: u64) -> Result<()> {
+        processors::test::exec(ctx, count)
     }
 }
