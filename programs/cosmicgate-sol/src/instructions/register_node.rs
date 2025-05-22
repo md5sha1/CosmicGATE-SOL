@@ -1,24 +1,28 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_2022::Token2022;
 
-
-use crate::account_data::node::Node;
+use crate::account_data::{node::Node, state::State};
 
 #[derive(Accounts)]
 #[event_cpi]
 pub struct RegisterNode<'info> {
+    #[account(mut)]
+    pub state: AccountLoader<'info, State>,
+
     #[account(init,
         payer = creator,
         space = Node::MAX_SIZE,
         seeds = [
             b"node",
-            mint_account.key().as_ref()
+            state.key().as_ref(),
+            state.load()?.node_count.to_string().as_ref(),
         ],
         bump
     )]
     pub node: AccountLoader<'info, Node>,
 
-    pub mint_account: Signer<'info>,
+    ///CHECK: This is a mint account for the soul nft for this node
+    pub soul_nft_mint: Signer<'info>,
 
     #[account(mut)]
     pub creator: Signer<'info>,

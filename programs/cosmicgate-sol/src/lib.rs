@@ -4,7 +4,7 @@ pub mod instructions;
 pub mod processors;
 pub mod program_error;
 use crate::instructions::register_node::*;
-use crate::instructions::task_queue::*;
+use crate::instructions::assign_task::*;
 use crate::instructions::test_instruct::*;
 use anchor_lang::prelude::*;
 
@@ -25,18 +25,20 @@ pub mod cosmicgate_sol {
      */
     pub fn register_node(
         ctx: Context<RegisterNode>,
-        hardware_specs: [u8; 32],
-        price: u64,
-        uptime: u64,
+        cpu: u64,   
+        memory: u64,
+        storage: u64,
+        os: u8,
+        arch: u8,        
     ) -> Result<()> {
-        processors::register_node::exec(ctx, hardware_specs, price, uptime)
+        processors::register_node::exec(ctx, cpu, memory, storage, os, arch)
     }
 
-    pub fn add_task(ctx: Context<TaskQueue>, price: u64) -> Result<()> {
-        processors::task_queue::exec(ctx, price)
+    pub fn add_task(ctx: Context<AssignTask>, required_cpu: u16, required_memory: u16, required_storage: u16, price: u64) -> Result<()> {
+        processors::register_task::exec(ctx, required_cpu, required_memory, required_storage, price)
     }
 
-    pub fn test(ctx: Context<TestInstruct>, count: u64) -> Result<()> {
+    pub fn update_task(ctx: Context<TestInstruct>, count: u64) -> Result<()> {
         processors::test::exec(ctx, count)
     }
 }

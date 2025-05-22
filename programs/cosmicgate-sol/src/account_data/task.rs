@@ -3,21 +3,41 @@ use anchor_lang::prelude::*;
 #[account(zero_copy)]
 #[derive(InitSpace)]
 pub struct Task {
-    pub id: Pubkey,
-    pub owner: Pubkey,         // Node wallet address
-    pub node_id: Pubkey,       // NFT Mint Address
-    pub price: u64, // In $GATE or lamports
+    pub id: u64,
+    pub creator: Pubkey,
+    pub node_assigned: Pubkey,
+    pub price: u64,
+    pub required_cpu: u16,
+    pub required_memory: u16,
+    pub required_storage: u16,
+    pub status: u8,
+    pub bump: u8,    
 }
 
 impl Task {
     pub const MAX_SIZE: usize = 8 + Self::INIT_SPACE;
 
-    pub fn new(id: Pubkey, owner: Pubkey, node_id: Pubkey, price: u64) -> Self {
+    pub fn new(
+        id: u64,
+        creator: Pubkey,
+        required_cpu: u16,
+        required_memory: u16,
+        required_storage: u16,
+        node_assigned: Pubkey,
+        price: u64,
+        status: u8,
+        bump: u8,
+    ) -> Self {
         Self {
             id,
-            owner,
-            node_id,
+            creator,
+            required_cpu,
+            required_memory,
+            required_storage,
+            node_assigned,
             price,
+            status,
+            bump,
         }
     }
 }

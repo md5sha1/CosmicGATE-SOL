@@ -1,17 +1,22 @@
 use anchor_lang::prelude::*;
+use bytemuck::Zeroable;
 
 #[account(zero_copy)]
 #[derive(InitSpace)]
 pub struct Node {
-    pub owner: Pubkey,            // Node wallet address
-    pub node_id: Pubkey,          // NFT Mint Address
-    pub hardware_specs: [u8; 32], // JSON string with specs
-    pub pricing_per_task: u64,    // In $GATE or lamports
-    pub uptime: u64,              // Uptime in seconds
-    pub total_rewards: u64,       // Total earned
-    pub reputation_score: u8,     // Score 0-100
-    pub bump: u8,                 // PDA bump
-    _padding: [u8; 6],
+    pub owner: Pubkey, // Node wallet address
+    pub soul_nft: Pubkey, // Soul NFT mint address
+    pub node_id: u64,
+    pub stake: u64,
+    pub cpu: u64,
+    pub memory: u64,
+    pub storage: u64,
+    pub os: u8,
+    pub arch: u8,    
+    pub reputation_score: u8,
+    pub status: u8, // 0: Pending, 1: Assigned, 2: Completed, 3: Failed
+    pub bump: u8,
+    _padding: [u8; 3],
 }
 
 impl Node {
@@ -19,22 +24,31 @@ impl Node {
 
     pub fn new(
         owner: Pubkey,
-        node_id: Pubkey,
-        hardware_specs: [u8; 32],
-        pricing_per_task: u64,
-        uptime: u64,
+        soul_nft: Pubkey,
+        node_id: u64,
+        stake: u64,
+        cpu: u64,
+        memory: u64,
+        storage: u64,
+        os: u8,
+        arch: u8,
+        status: u8,
         bump: u8,
     ) -> Self {
         Self {
             owner,
+            soul_nft,
             node_id,
-            hardware_specs,
-            pricing_per_task,
-            uptime,
-            total_rewards: 0,
+            stake,
+            cpu,
+            memory,
+            storage,
+            os,
+            arch,
             reputation_score: 0,
+            status,
             bump,
-            _padding: [0; 6],
+            _padding: [0; 3],
         }
     }
 }

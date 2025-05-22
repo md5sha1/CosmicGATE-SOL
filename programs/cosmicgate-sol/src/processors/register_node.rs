@@ -15,28 +15,54 @@ use anchor_spl::{
 #[event]
 pub struct NodeRegisterEvent {
     pub creator: Pubkey,
-    pub node_id: Pubkey,
-    pub hardware_specs: [u8; 32],
-    pub price_per_task: u64,
-    pub uptime: u64,
+    pub node: Pubkey,
+    pub node_id: u64,
+    pub cpu: u64,
+    pub memory: u64,
+    pub storage: u64,
+    pub os: u8,
+    pub arch: u8,
 }
 
 pub fn exec(
     ctx: Context<RegisterNode>,
-    hardware_specs: [u8; 32],
-    price: u64,
-    uptime: u64,
+    cpu: u64,
+    memory: u64,
+    storage: u64,
+    os: u8,
+    arch: u8,    
 ) -> Result<()> {
     let node = &mut ctx.accounts.node.load_init()?;
     **node = Node::new(
         ctx.accounts.creator.key(),
-        ctx.accounts.mint_account.key(),
-        hardware_specs,
-        price,
-        uptime,
+        ctx.accounts.soul_nft_mint.key(),
+        ctx.accounts.state.load()?.node_count,
+        0,
+        cpu,
+        memory,
+        storage,
+        os,
+        arch,
+        0,
         ctx.bumps.node,
     );
 
+    create_soul_nft(&ctx)?;
+
+    emit_cpi!(NodeRegisterEvent {
+        creator: ctx.accounts.creator.key(),
+        node: ctx.accounts.soul_nft_mint.key(),
+        node_id: ctx.accounts.state.load()?.node_count,
+        cpu,
+        memory,
+        storage,
+        os,
+        arch,        
+    });
+    Ok(())
+}
+
+fn create_soul_nft(ctx: &Context<RegisterNode>) -> Result<()> {
     //calcuate mint size
     let mint_size =
         ExtensionType::try_calculate_account_len::<PodMint>(&[ExtensionType::NonTransferable])?;
@@ -49,7 +75,7 @@ pub fn exec(
             ctx.accounts.system_program.to_account_info(),
             CreateAccount {
                 from: ctx.accounts.creator.to_account_info(),
-                to: ctx.accounts.mint_account.to_account_info(),
+                to: ctx.accounts.soul_nft_mint.to_account_info(),
             },
         ),
         lamports,
@@ -63,7 +89,7 @@ pub fn exec(
         ctx.accounts.token_program.to_account_info(),
         NonTransferableMintInitialize {
             token_program_id: ctx.accounts.token_program.to_account_info(),
-            mint: ctx.accounts.mint_account.to_account_info(),
+            mint: ctx.accounts.soul_nft_mint.to_account_info(),
         },
     ))?;
 
@@ -72,7 +98,7 @@ pub fn exec(
         CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
             InitializeMint2 {
-                mint: ctx.accounts.mint_account.to_account_info(),
+                mint: ctx.accounts.soul_nft_mint.to_account_info(),
             },
         ),
         0,                                 // decimals
@@ -80,12 +106,5 @@ pub fn exec(
         Some(&ctx.accounts.creator.key()), // freeze authority
     )?;
 
-    emit_cpi!(NodeRegisterEvent{
-        creator: ctx.accounts.creator.key(),
-        node_id: ctx.accounts.mint_account.key(),
-        hardware_specs,
-        price_per_task:price,
-        uptime,
-    });
     Ok(())
 }

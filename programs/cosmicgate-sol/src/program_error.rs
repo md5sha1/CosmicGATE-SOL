@@ -3,5 +3,7 @@ use anchor_lang::prelude::*;
 #[error_code]
 pub enum ErrorCode {
     #[msg("Only admin")]
-    OnlyAdmin
+    OnlyAdmin,
+    #[msg("Node is working")]
+    NodeWorking,
 }
