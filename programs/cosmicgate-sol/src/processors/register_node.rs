@@ -33,10 +33,11 @@ pub fn exec(
     arch: u8,    
 ) -> Result<()> {
     let node = &mut ctx.accounts.node.load_init()?;
+    let mut state = ctx.accounts.state.load_mut()?;
     **node = Node::new(
         ctx.accounts.creator.key(),
         ctx.accounts.soul_nft_mint.key(),
-        ctx.accounts.state.load()?.node_count,
+        state.node_count,
         0,
         cpu,
         memory,
@@ -52,13 +53,15 @@ pub fn exec(
     emit_cpi!(NodeRegisterEvent {
         creator: ctx.accounts.creator.key(),
         node: ctx.accounts.soul_nft_mint.key(),
-        node_id: ctx.accounts.state.load()?.node_count,
+        node_id: state.node_count,
         cpu,
         memory,
         storage,
         os,
         arch,        
     });
+
+    state.node_count += 1;
     Ok(())
 }
 
