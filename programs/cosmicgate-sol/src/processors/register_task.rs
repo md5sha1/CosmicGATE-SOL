@@ -28,6 +28,7 @@ pub fn exec(ctx: Context<AssignTask>, required_cpu: u16, required_memory: u16, r
         required_memory,
         required_storage,
         ctx.accounts.node.key(),
+        node.node_id,
         price,
         0,
         ctx.bumps.task,

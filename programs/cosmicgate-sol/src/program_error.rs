@@ -6,4 +6,6 @@ pub enum ErrorCode {
     OnlyAdmin,
     #[msg("Node is working")]
     NodeWorking,
+    #[msg("Task creator mismatch")]
+    TaskCreatorMismatch,
 }

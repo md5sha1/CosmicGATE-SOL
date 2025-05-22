@@ -1,5 +1,6 @@
 use crate::account_data::{node::Node, state::State, task::Task};
 use anchor_lang::prelude::*;
+use crate::program_error::ErrorCode;
 
 #[derive(Accounts)]
 #[event_cpi]
@@ -21,4 +22,12 @@ pub struct AssignTask<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+impl<'info> AssignTask<'info> {
+    pub fn validate(&self) -> Result<()> {
+        let task = self.task.load()?;
+        require!(task.creator == self.creator.key(), ErrorCode::TaskCreatorMismatch);
+        Ok(())
+    }
 }
