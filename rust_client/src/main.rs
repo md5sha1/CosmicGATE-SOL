@@ -10,10 +10,12 @@ use anchor_client::{
     Client, Cluster,
 };
 use func::initialize::initialize;
+use func::register_node::register_node;
 fn main() {
     let payer = read_keypair_file("../wallets/deployer_devnet.json").unwrap();
     let client = Client::new_with_options(Cluster::Localnet, &payer, CommitmentConfig::confirmed());
     let program = client.program(*func::config::PROGRAM_ID).unwrap();
 
-    let _ = initialize(&program, &payer);
+    // let _ = initialize(&program, &payer);
+    let _ = register_node(&program, &payer, 0);
 }
