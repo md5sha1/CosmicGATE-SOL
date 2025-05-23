@@ -4,6 +4,7 @@ use crate::program_error::ErrorCode;
 
 #[derive(Accounts)]
 #[event_cpi]
+#[instruction(node_id: u64)]
 pub struct AssignTask<'info> {
     #[account(mut)]
     pub state: AccountLoader<'info, State>,
@@ -12,11 +13,11 @@ pub struct AssignTask<'info> {
         payer = creator,
         space = Task::MAX_SIZE,
         seeds = [b"task".as_ref(), state.key().as_ref(), state.load()?.task_count.to_string().as_ref()],
-        bump,
+        bump,   
     )]
     pub task: AccountLoader<'info, Task>,
 
-    #[account(mut, seeds = [b"node".as_ref(), state.key().as_ref(), state.load()?.node_count.to_string().as_ref()], bump = node.load()?.bump)]
+    #[account(mut, seeds = [b"node".as_ref(), state.key().as_ref(), node_id.to_string().as_ref()], bump)]
     pub node: AccountLoader<'info, Node>,
 
     #[account(mut)]

@@ -13,7 +13,7 @@ pub struct Node {
     pub os: u8,
     pub arch: u8,    
     pub reputation_score: u8,
-    pub status: u8, // 0: Pending, 1: Assigned, 2: Completed, 3: Failed
+    pub status: u8, // 0: Idle, 1: Busy, 2: Offline
     pub bump: u8,
     _padding: [u8; 3],
 }

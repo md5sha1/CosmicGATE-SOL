@@ -22,6 +22,7 @@ pub struct RegisterNode<'info> {
     pub node: AccountLoader<'info, Node>,
 
     ///CHECK: This is a mint account for the soul nft for this node
+    #[account(mut)]
     pub soul_nft_mint: Signer<'info>,
 
     #[account(mut)]
