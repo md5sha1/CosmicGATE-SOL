@@ -11,6 +11,6 @@ use anchor_client::{
 };
 fn main() {
     let payer = read_keypair_file("../wallets/deployer_devnet.json").unwrap();
-    let client = Client::new_with_options(Cluster::Devnet, &payer, CommitmentConfig::confirmed());
+    let client = Client::new_with_options(Cluster::Localnet, &payer, CommitmentConfig::confirmed());
     let program = client.program(*func::config::PROGRAM_ID).unwrap();
 }

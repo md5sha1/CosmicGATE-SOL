@@ -1,8 +1,12 @@
 {
   "license": "ISC",  
   "scripts": {
-    "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "deploy:devnet": "solana program deploy --with-compute-unit-price 1000000  --max-sign-attempts 1000 --url https://api.devnet.solana.com --keypair ./wallets/deployer_devnet.json --upgrade-authority ./wallets/deployer_devnet.json --program-id ./wallets/cosmicgate.json target/deploy/cosmicgate.so",
+    "resume:devnet": "solana program deploy --with-compute-unit-price 1000000  --max-sign-attempts 1000 --url https://api.devnet.solana.com --keypair ./wallets/deployer_devnet.json --upgrade-authority ./wallets/deployer_devnet.json --program-id ./wallets/cosmicgate.json target/deploy/cosmicgate.so --buffer ./wallets/recovered-buffer.json",
+    "deploy:mainnet": "solana program deploy --with-compute-unit-price 1000000  --max-sign-attempts 1000 --url https://api.mainnet-beta.solana.com --keypair ./wallets/deployer_mainnet.json --upgrade-authority ./wallets/deployer_mainnet.json --program-id ./wallets/cosmicgate.json target/deploy/cosmicgate.so",
+    "resume:mainnet": "solana program deploy --with-compute-unit-price 1000000  --max-sign-attempts 1000 --url https://api.mainnet-beta.solana.com --keypair ./wallets/deployer_mainnet.json --upgrade-authority ./wallets/deployer_mainnet.json --program-id ./wallets/cosmicgate.json target/deploy/cosmicgate.so --buffer ./wallets/recovered-buffer.json",
+    "run_validator": "solana-test-validator --bpf-program CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d ./deps/mpl-core.so --reset",
+    "update:localnet": "solana program deploy --with-compute-unit-price 1000000  --max-sign-attempts 1000 --url http://127.0.0.1:8899 --keypair ./wallets/deployer_devnet.json --upgrade-authority ./wallets/deployer_devnet.json --program-id ./wallets/cosmicgate.json ./target/deploy/cosmicgate.so"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1"
