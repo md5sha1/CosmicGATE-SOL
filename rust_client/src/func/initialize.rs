@@ -10,7 +10,7 @@ use cosmicgate_sol::accounts::Initialize;
 
 pub fn initialize(program: &Program<&Keypair>, payer: &Keypair) -> Result<()> {
     let state: Keypair = Keypair::new();
-
+    println!("{:?}", state.pubkey().to_string());
     let tx = program.request().accounts(Initialize{
         state: state.pubkey(),
         creator: payer.pubkey(),

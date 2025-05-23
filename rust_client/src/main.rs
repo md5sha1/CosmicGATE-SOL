@@ -9,8 +9,11 @@ use anchor_client::{
     },
     Client, Cluster,
 };
+use func::initialize::initialize;
 fn main() {
     let payer = read_keypair_file("../wallets/deployer_devnet.json").unwrap();
     let client = Client::new_with_options(Cluster::Localnet, &payer, CommitmentConfig::confirmed());
     let program = client.program(*func::config::PROGRAM_ID).unwrap();
+
+    let _ = initialize(&program, &payer);
 }
