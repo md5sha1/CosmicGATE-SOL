@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use bytemuck::Zeroable;
 
 #[account(zero_copy)]
 #[derive(InitSpace)]

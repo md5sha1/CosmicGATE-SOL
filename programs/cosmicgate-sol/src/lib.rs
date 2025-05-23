@@ -3,18 +3,15 @@ pub mod account_data;
 pub mod instructions;
 pub mod processors;
 pub mod program_error;
-use crate::instructions::register_node::*;
 use crate::instructions::assign_task::*;
-use crate::instructions::test_instruct::*;
 use crate::instructions::update_task::*;
+use crate::instructions::initialize::*;
+use crate::instructions::register_node::*;
 use anchor_lang::prelude::*;
 
 declare_id!("Bw542RoLc3equ6jTWZMp7gEJmiakoDTnLrCHc7n5QMgv");
-
 #[program]
-pub mod cosmicgate_sol {
-        
-    
+pub mod cosmicgate_sol {    
 
     use super::*;
     /**
@@ -43,5 +40,9 @@ pub mod cosmicgate_sol {
 
     pub fn update_task(ctx: Context<UpdateTask>, task_id: u64, status: u8) -> Result<()> {
         processors::update_task::exec(ctx, task_id, status)
+    }
+
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        processors::initialize::exec(ctx)
     }
 }
