@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[account(zero_copy)]
-#[derive(InitSpace)]
+#[derive(InitSpace, Debug)]
 pub struct Node {
     pub owner: Pubkey, // Node wallet address
     pub soul_nft: Pubkey, // Soul NFT mint address

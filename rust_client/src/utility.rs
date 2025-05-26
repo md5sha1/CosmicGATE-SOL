@@ -15,3 +15,17 @@ pub fn get_node_pub(program: &Program<&Keypair>, node_id: u64) -> Result<Pubkey>
     println!("node: {:?}", node);
     Ok(node)
 }
+
+pub fn get_task_pub(program: &Program<&Keypair>, task_id: u64) -> Result<Pubkey> {
+    let task = Pubkey::find_program_address(
+        &[
+            b"task",
+            (*STATE).as_ref(),
+            task_id.to_string().as_ref(),
+        ],
+        &program.id(),
+    )
+    .0;
+    println!("task: {:?}", task);
+    Ok(task)
+}

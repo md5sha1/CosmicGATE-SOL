@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[account(zero_copy)]
-#[derive(InitSpace)]
+#[derive(InitSpace, Debug)]
 pub struct Task {
     pub id: u64,
     pub creator: Pubkey,

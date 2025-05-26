@@ -8,14 +8,18 @@ use anchor_spl::token_2022::Token2022;
 
 use crate::func::config::STATE;
 use crate::utility::get_node_pub;
-use cosmicgate_sol::accounts::RegisterNode;
+use cosmicgate_sol::{account_data::node::Node, accounts::RegisterNode};
 use cosmicgate_sol::instruction::RegisterNode as RegisterNodeArgs;
+
+pub fn get_node_info(program: &Program<&Keypair>, node_id: u64) -> Result<()> {
+    let node = program.account::<Node>(get_node_pub(program, node_id).unwrap()).unwrap();
+    println!("{:?}", node);
+    Ok(())
+}
 
 pub fn register_node(program: &Program<&Keypair>, payer: &Keypair, node_id: u64) -> Result<()> {
     let soul_nft: Keypair = Keypair::new();
-    let node = get_node_pub(program, node_id).unwrap();
-    println!("{:?}", soul_nft.pubkey().to_string());
-    println!("{:?}", node.to_string());
+    let node = get_node_pub(program, node_id).unwrap();    
     let (event_authority, _) = Pubkey::find_program_address(&[b"__event_authority"], &program.id());
 
     let tx = program

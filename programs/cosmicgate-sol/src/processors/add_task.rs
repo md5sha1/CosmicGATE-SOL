@@ -19,6 +19,7 @@ pub struct TaskEvent {
 
 pub fn exec(
     ctx: Context<AssignTask>,
+    node_id: u64,
     required_cpu: u64,
     required_memory: u64,
     required_storage: u64,
@@ -38,7 +39,7 @@ pub fn exec(
         required_memory,
         required_storage,
         ctx.accounts.node.key(),
-        node.node_id,
+        node_id,
         data_hash,
         result_hash,
         ctx.bumps.task,
@@ -48,7 +49,7 @@ pub fn exec(
         task: ctx.accounts.task.key(),
         task_id: state.task_count,
         node: Some(ctx.accounts.node.key()),
-        node_id: Some(ctx.accounts.node.load()?.node_id),
+        node_id: Some(node_id),
         owner: ctx.accounts.creator.key(),
         required_cpu,
         required_memory,
