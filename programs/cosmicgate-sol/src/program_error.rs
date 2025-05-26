@@ -14,4 +14,6 @@ pub enum ErrorCode {
     NodeNotEnoughMemory,
     #[msg("Node not enough storage")]
     NodeNotEnoughStorage,
+    #[msg("Cannot update task status")]
+    CannotUpdateTaskStatus
 }

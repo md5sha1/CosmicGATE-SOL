@@ -39,7 +39,6 @@ pub fn exec(
         required_storage,
         ctx.accounts.node.key(),
         node.node_id,
-        0,
         data_hash,
         result_hash,
         ctx.bumps.task,

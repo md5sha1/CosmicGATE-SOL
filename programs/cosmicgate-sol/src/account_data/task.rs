@@ -12,7 +12,7 @@ pub struct Task {
     pub required_cpu: u64,
     pub required_memory: u64,
     pub required_storage: u64,
-    pub status: u8, // 0: Pending, 1: Assigned, 2: Completed, 3: Failed
+    pub status: u8, //1: Assigned, 2: Completed, 3: Failed
     pub bump: u8,
     _padding: [u8; 6],
 }
@@ -27,8 +27,7 @@ impl Task {
         required_memory: u64,
         required_storage: u64,
         node_assigned: Pubkey,
-        node_id: u64,        
-        status: u8,
+        node_id: u64,                
         data_hash: [u8; 128],
         result_hash: [u8; 128],
         bump: u8,
@@ -41,7 +40,7 @@ impl Task {
             required_cpu,
             required_memory,
             required_storage,
-            status,
+            status: 1, //Assigned
             data_hash,
             result_hash,
             bump,
