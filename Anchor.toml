@@ -6,13 +6,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-cosmicgate_sol = "Bw542RoLc3equ6jTWZMp7gEJmiakoDTnLrCHc7n5QMgv"
+cosmicgate_sol = "FZLsE6xjkzrLc75VQHpwrrHgSeDZFvAUFqx33PdEevbC"
 
 [programs.devnet]
-cosmicgate_sol = "Bw542RoLc3equ6jTWZMp7gEJmiakoDTnLrCHc7n5QMgv"
+cosmicgate_sol = "FZLsE6xjkzrLc75VQHpwrrHgSeDZFvAUFqx33PdEevbC"
 
 [programs.mainnet]
-cosmicgate_sol = "Bw542RoLc3equ6jTWZMp7gEJmiakoDTnLrCHc7n5QMgv"
+cosmicgate_sol = "FZLsE6xjkzrLc75VQHpwrrHgSeDZFvAUFqx33PdEevbC"
 
 [registry]
 url = "https://api.apr.dev"

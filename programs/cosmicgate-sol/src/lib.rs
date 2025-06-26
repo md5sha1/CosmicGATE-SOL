@@ -9,7 +9,7 @@ use crate::instructions::initialize::*;
 use crate::instructions::register_node::*;
 use anchor_lang::prelude::*;
 
-declare_id!("Bw542RoLc3equ6jTWZMp7gEJmiakoDTnLrCHc7n5QMgv");
+declare_id!("FZLsE6xjkzrLc75VQHpwrrHgSeDZFvAUFqx33PdEevbC");
 #[program]
 pub mod cosmicgate_sol {    
 
@@ -25,13 +25,14 @@ pub mod cosmicgate_sol {
      */
     pub fn register_node(
         ctx: Context<RegisterNode>,
+        node_seed: Pubkey,
         cpu: u64,   
         memory: u64,
         storage: u64,
         os: u8,
         arch: u8,        
     ) -> Result<()> {
-        processors::register_node::exec(ctx, cpu, memory, storage, os, arch)
+        processors::register_node::exec(ctx, node_seed, cpu, memory, storage, os, arch)
     }
 
     pub fn add_task(ctx: Context<AssignTask>, node_id: u64, required_cpu: u64, required_memory: u64, required_storage: u64, data_hash: [u8; 128], result_hash: [u8; 128]) -> Result<()> {

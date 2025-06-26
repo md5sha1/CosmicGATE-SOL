@@ -5,6 +5,7 @@ use crate::account_data::{node::Node, state::State};
 
 #[derive(Accounts)]
 #[event_cpi]
+#[instruction(node_seed: Pubkey)]
 pub struct RegisterNode<'info> {
     #[account(mut)]
     pub state: AccountLoader<'info, State>,
@@ -15,7 +16,7 @@ pub struct RegisterNode<'info> {
         seeds = [
             b"node",
             state.key().as_ref(),
-            state.load()?.node_count.to_string().as_ref(),
+            node_seed.as_ref(),
         ],
         bump
     )]

@@ -5,6 +5,7 @@ use anchor_lang::prelude::*;
 pub struct Node {
     pub owner: Pubkey, // Node wallet address
     pub soul_nft: Pubkey, // Soul NFT mint address
+    pub node_seed: Pubkey,
     pub node_id: u64,
     pub stake: u64,
     pub cpu: u64,
@@ -24,6 +25,7 @@ impl Node {
     pub fn new(
         owner: Pubkey,
         soul_nft: Pubkey,
+        node_seed: Pubkey,
         node_id: u64,
         stake: u64,
         cpu: u64,
@@ -37,6 +39,7 @@ impl Node {
         Self {
             owner,
             soul_nft,
+            node_seed,
             node_id,
             stake,
             cpu,
