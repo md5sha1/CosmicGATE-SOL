@@ -16,6 +16,7 @@ use anchor_spl::{
 pub struct NodeRegisterEvent {
     pub creator: Pubkey,
     pub node: Pubkey,
+    pub soul_nft: Pubkey,
     pub node_seed: Pubkey,
     pub node_id: u64,
     pub cpu: u64,
@@ -55,7 +56,8 @@ pub fn exec(
 
     emit_cpi!(NodeRegisterEvent {
         creator: ctx.accounts.creator.key(),
-        node: ctx.accounts.soul_nft_mint.key(),
+        soul_nft: ctx.accounts.soul_nft_mint.key(),
+        node: ctx.accounts.node.key(),
         node_seed: node_seed.key(),
         node_id: state.node_count,
         cpu,
