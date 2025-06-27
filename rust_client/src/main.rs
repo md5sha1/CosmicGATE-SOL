@@ -18,10 +18,10 @@ fn main() {
     let client = Client::new_with_options(Cluster::Devnet, &payer, CommitmentConfig::confirmed());
     let program = client.program(*func::config::PROGRAM_ID).unwrap();
 
-    let _ = initialize(&program, &payer);
+    // let _ = initialize(&program, &payer);
     
     // let _ = state_info(&program);
-    // let _ = register_node(&program, &payer);
+    let _ = register_node(&program, &payer);
     // let _ = get_node_info(&program, 0);
 
     // let node_seed = Pubkey::from_str("ExaBAi8pfGdBAL92cRcTvqTTKfKoULnSQhfAyF7c3yYy").unwrap();
