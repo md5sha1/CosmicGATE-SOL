@@ -8,7 +8,7 @@ pub struct Task {
     pub node_assigned: Pubkey,  // Use Pubkey::default() when no node is assigned
     pub data_hash: [u8; 128],
     pub result_hash: [u8; 128],
-    pub node_id: u64,    
+    pub node_seed: Pubkey,    
     pub required_cpu: u64,
     pub required_memory: u64,
     pub required_storage: u64,
@@ -27,7 +27,7 @@ impl Task {
         required_memory: u64,
         required_storage: u64,
         node_assigned: Pubkey,
-        node_id: u64,                
+        node_seed: Pubkey,                
         data_hash: [u8; 128],
         result_hash: [u8; 128],
         bump: u8,
@@ -36,7 +36,7 @@ impl Task {
             id,
             creator,
             node_assigned,
-            node_id,
+            node_seed,
             required_cpu,
             required_memory,
             required_storage,
@@ -54,9 +54,9 @@ impl Task {
     }
 
     // Helper method to get node info if assigned
-    pub fn get_node_info(&self) -> Option<(Pubkey, u64)> {
+    pub fn get_node_info(&self) -> Option<(Pubkey, Pubkey)> {
         if self.is_node_assigned() {
-            Some((self.node_assigned, self.node_id))
+            Some((self.node_assigned, self.node_seed))
         } else {
             None
         }

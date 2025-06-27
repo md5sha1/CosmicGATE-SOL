@@ -17,10 +17,10 @@ use cosmicgate_sol::{accounts::UpdateTask, instruction::UpdateTask as UpdateTask
 pub fn add_task(
     program: &Program<&Keypair>,
     payer: &Keypair,
-    node_id: u64,
+    node_seed: Pubkey,
     task_id: u64,
 ) -> Result<()> {
-    let node = get_node_pub(program, node_id).unwrap();
+    let node = get_node_pub(program, node_seed).unwrap();
     let task = get_task_pub(program, task_id).unwrap();
 
     let (event_authority, _) = Pubkey::find_program_address(&[b"__event_authority"], &program.id());
@@ -37,7 +37,7 @@ pub fn add_task(
             program: program.id(),
         })
         .args(AddTaskArgs {
-            node_id: node_id,
+            node_seed: node_seed,
             required_cpu: 1,
             required_memory: 1,
             required_storage: 1,
@@ -58,11 +58,11 @@ pub fn add_task(
 pub fn update_task(
     program: &Program<&Keypair>,
     payer: &Keypair,
-    node_id: u64,
+    node_seed: Pubkey,
     task_id: u64,
     status: u8,
 ) -> Result<()> {
-    let node = get_node_pub(program, node_id).unwrap();
+    let node = get_node_pub(program, node_seed).unwrap();
     let task = get_task_pub(program, task_id).unwrap();
 
     let (event_authority, _) = Pubkey::find_program_address(&[b"__event_authority"], &program.id());

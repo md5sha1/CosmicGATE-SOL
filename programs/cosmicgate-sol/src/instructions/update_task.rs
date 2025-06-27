@@ -15,7 +15,7 @@ pub struct UpdateTask<'info> {
     )]
     pub task: AccountLoader<'info, Task>,
 
-    #[account(mut, seeds = [b"node".as_ref(), state.key().as_ref(), task.load()?.node_id.to_string().as_ref()], bump = node.load()?.bump)]
+    #[account(mut, seeds = [b"node".as_ref(), state.key().as_ref(), task.load()?.node_seed.as_ref()], bump = node.load()?.bump)]
     pub node: AccountLoader<'info, Node>,
 
     #[account(mut)]

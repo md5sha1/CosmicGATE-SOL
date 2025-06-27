@@ -11,15 +11,18 @@ use crate::utility::get_node_pub;
 use cosmicgate_sol::{account_data::node::Node, accounts::RegisterNode};
 use cosmicgate_sol::instruction::RegisterNode as RegisterNodeArgs;
 
-pub fn get_node_info(program: &Program<&Keypair>, node_id: u64) -> Result<()> {
-    let node = program.account::<Node>(get_node_pub(program, node_id).unwrap()).unwrap();
+pub fn get_node_info(program: &Program<&Keypair>, node_seed: Pubkey) -> Result<()> {
+    let node = program.account::<Node>(get_node_pub(program, node_seed).unwrap()).unwrap();
     println!("{:?}", node);
     Ok(())
 }
 
-pub fn register_node(program: &Program<&Keypair>, payer: &Keypair, node_id: u64) -> Result<()> {
+pub fn register_node(program: &Program<&Keypair>, payer: &Keypair) -> Result<()> {
     let soul_nft: Keypair = Keypair::new();
-    let node = get_node_pub(program, node_id).unwrap();    
+    let node_seed: Keypair = Keypair::new();
+    println!("soul nft {:?}", soul_nft.pubkey());
+    println!("node seed {:?}", node_seed.pubkey());
+    let node = get_node_pub(program, node_seed.pubkey()).unwrap();    
     let (event_authority, _) = Pubkey::find_program_address(&[b"__event_authority"], &program.id());
 
     let tx = program
@@ -35,6 +38,7 @@ pub fn register_node(program: &Program<&Keypair>, payer: &Keypair, node_id: u64)
             program: program.id()
         })
         .args(RegisterNodeArgs {
+            node_seed: node_seed.pubkey(),
             cpu: 1,
             memory: 1,
             storage: 1,
