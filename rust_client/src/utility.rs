@@ -16,12 +16,12 @@ pub fn get_node_pub(program: &Program<&Keypair>, node_seed: Pubkey) -> Result<Pu
     Ok(node)
 }
 
-pub fn get_task_pub(program: &Program<&Keypair>, task_id: u64) -> Result<Pubkey> {
+pub fn get_task_pub(program: &Program<&Keypair>, task_seed: Pubkey) -> Result<Pubkey> {
     let task = Pubkey::find_program_address(
         &[
             b"task",
             (*STATE).as_ref(),
-            task_id.to_string().as_ref(),
+            task_seed.as_ref(),
         ],
         &program.id(),
     )

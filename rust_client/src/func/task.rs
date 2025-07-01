@@ -17,11 +17,13 @@ use cosmicgate_sol::{accounts::UpdateTask, instruction::UpdateTask as UpdateTask
 pub fn add_task(
     program: &Program<&Keypair>,
     payer: &Keypair,
-    node_seed: Pubkey,
-    task_id: u64,
+    node_seed: Pubkey,    
+    metadata_url: String,
 ) -> Result<()> {
     let node = get_node_pub(program, node_seed).unwrap();
-    let task = get_task_pub(program, task_id).unwrap();
+    let task_seed: Keypair = Keypair::new();
+    println!("task seed {:?}", task_seed.pubkey());
+    let task = get_task_pub(program, task_seed.pubkey()).unwrap();
 
     let (event_authority, _) = Pubkey::find_program_address(&[b"__event_authority"], &program.id());
 
@@ -38,11 +40,8 @@ pub fn add_task(
         })
         .args(AddTaskArgs {
             node_seed: node_seed,
-            required_cpu: 1,
-            required_memory: 1,
-            required_storage: 1,
-            data_hash: [0; 128],
-            result_hash: [0; 128],
+            task_seed: task_seed.pubkey(),
+            metadata_url: metadata_url,
         })
         .signer(payer)
         .send()
@@ -59,33 +58,33 @@ pub fn update_task(
     program: &Program<&Keypair>,
     payer: &Keypair,
     node_seed: Pubkey,
-    task_id: u64,
+    task_seed: Pubkey,
     status: u8,
 ) -> Result<()> {
     let node = get_node_pub(program, node_seed).unwrap();
-    let task = get_task_pub(program, task_id).unwrap();
+    let task = get_task_pub(program, task_seed).unwrap();
 
     let (event_authority, _) = Pubkey::find_program_address(&[b"__event_authority"], &program.id());
 
-    let tx = program
-        .request()
-        .accounts(UpdateTask {
-            state: *STATE,
-            node: node,
-            task: task,
-            creator: payer.pubkey(),
-            system_program: System::id(),
-            event_authority: event_authority,
-            program: program.id(),
-        })
-        .args(UpdateTaskArgs {
-            task_id: task_id,
-            status: status,
-        })
-        .signer(payer)
-        .send()
-        .expect("Failed to send transaction");
+    // let tx = program
+    //     .request()
+    //     .accounts(UpdateTask {
+    //         state: *STATE,
+    //         node: node,
+    //         task: task,
+    //         creator: payer.pubkey(),
+    //         system_program: System::id(),
+    //         event_authority: event_authority,
+    //         program: program.id(),
+    //     })
+    //     .args(UpdateTaskArgs {
+    //         task_id: task_id,
+    //         status: status,
+    //     })
+    //     .signer(payer)
+    //     .send()
+    //     .expect("Failed to send transaction");
 
-    println!("Transaction: {}", tx.to_string());
+    // println!("Transaction: {}", tx.to_string());
     Ok(())
 }

@@ -6,56 +6,44 @@ use anchor_lang::prelude::*;
 #[event]
 pub struct TaskEvent {
     pub task: Pubkey,
+    pub task_seed: Pubkey,
     pub task_id: u64,
     pub node: Option<Pubkey>,
     pub node_seed: Option<Pubkey>,
     pub owner: Pubkey,
-    pub required_cpu: u64,
-    pub required_memory: u64,
-    pub required_storage: u64,
-    pub data_hash: [u8; 128],
-    pub result_hash: [u8; 128],
+    pub metadata_url: String,
 }
 
 pub fn exec(
     ctx: Context<AssignTask>,
     node_seed: Pubkey,
-    required_cpu: u64,
-    required_memory: u64,
-    required_storage: u64,
-    data_hash: [u8; 128],
-    result_hash: [u8; 128],
+    task_seed: Pubkey,
+    metadata_url: String,
 ) -> Result<()> {
     let task = &mut ctx.accounts.task.load_init()?;
     let node = &mut ctx.accounts.node.load_mut()?;
     let state = &mut ctx.accounts.state.load_mut()?;
 
-    validate_node(node, required_cpu, required_memory, required_storage)?;
+    validate_node(node)?;
 
     **task = Task::new(
         state.task_count,
+        task_seed.key(),
         ctx.accounts.creator.key(),
-        required_cpu,
-        required_memory,
-        required_storage,
         ctx.accounts.node.key(),
-        node_seed.clone(),
-        data_hash,
-        result_hash,
+        node_seed.key(),
+        metadata_url.clone(),
         ctx.bumps.task,
     );
 
     emit_cpi!(TaskEvent {
         task: ctx.accounts.task.key(),
+        task_seed: task_seed,
         task_id: state.task_count,
         node: Some(ctx.accounts.node.key()),
         node_seed: Some(node_seed),
         owner: ctx.accounts.creator.key(),
-        required_cpu,
-        required_memory,
-        required_storage,
-        data_hash,
-        result_hash,
+        metadata_url,      
     });
 
     //update task count
@@ -67,24 +55,21 @@ pub fn exec(
 
 fn validate_node(
     node: &Node,
-    required_cpu: u64,
-    required_memory: u64,
-    required_storage: u64,
 ) -> Result<()> {
     //if the node is not idle, cannot assign task
     if node.status != 0 {
         return Err(ErrorCode::NodeNotIdle.into());
     }
-    if node.cpu < required_cpu  {
-        return Err(ErrorCode::NodeNotEnoughCpu.into());
-    }
+    // if node.cpu < required_cpu  {
+    //     return Err(ErrorCode::NodeNotEnoughCpu.into());
+    // }
 
-    if node.memory < required_memory {
-        return Err(ErrorCode::NodeNotEnoughMemory.into());
-    }
+    // if node.memory < required_memory {
+    //     return Err(ErrorCode::NodeNotEnoughMemory.into());
+    // }
 
-    if node.storage < required_storage {
-        return Err(ErrorCode::NodeNotEnoughStorage.into());
-    }
+    // if node.storage < required_storage {
+    //     return Err(ErrorCode::NodeNotEnoughStorage.into());
+    // }
     Ok(())
 }
