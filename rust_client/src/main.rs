@@ -15,16 +15,16 @@ use func::{node::get_node_info, state::{initialize, state_info}, task::{add_task
 use func::node::register_node;
 fn main() {
     let payer = read_keypair_file("../wallets/deployer_devnet.json").unwrap();
-    let client = Client::new_with_options(Cluster::Localnet, &payer, CommitmentConfig::confirmed());
+    let client = Client::new_with_options(Cluster::Devnet, &payer, CommitmentConfig::confirmed());
     let program = client.program(*func::config::PROGRAM_ID).unwrap();
 
     // let _ = initialize(&program, &payer);
     
     // let _ = state_info(&program);
-    // let _ = register_node(&program, &payer);
+    let _ = register_node(&program, &payer);
     // let _ = get_node_info(&program, 0);
 
-    let node_seed = Pubkey::from_str("7CTGqHA8HiqtvvvmQvtH8j5TosQ5sDizV5oBFeRjQdkG").unwrap();
-    let _ = add_task(&program, &payer, node_seed, "https://www.google.com".to_string());
+    // let node_seed = Pubkey::from_str("7CTGqHA8HiqtvvvmQvtH8j5TosQ5sDizV5oBFeRjQdkG").unwrap();
+    // let _ = add_task(&program, &payer, node_seed, "https://www.google.com".to_string());
     // let _ = update_task(&program, &payer, 0, 0, 2);
 }
