@@ -21,10 +21,10 @@ fn main() {
     // let _ = initialize(&program, &payer);
     
     // let _ = state_info(&program);
-    let _ = register_node(&program, &payer);
+    // let _ = register_node(&program, &payer);
     // let _ = get_node_info(&program, 0);
 
-    // let node_seed = Pubkey::from_str("7CTGqHA8HiqtvvvmQvtH8j5TosQ5sDizV5oBFeRjQdkG").unwrap();
-    // let _ = add_task(&program, &payer, node_seed, "https://www.google.com".to_string());
+    let node_seed = Pubkey::from_str("ETtubqgY8LFCS9dWdLUrCu2rVW5ht4jykYdhDKd3q7r2").unwrap();
+    let _ = add_task(&program, &payer, node_seed, "https://www.google.com".to_string());
     // let _ = update_task(&program, &payer, 0, 0, 2);
 }
