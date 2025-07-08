@@ -4,6 +4,7 @@ use anchor_client::{
     solana_sdk::{signature::Keypair, signer::Signer},
     Program,
 };
+use uuid::Uuid;
 
 
 use crate::utility::get_node_pub;
@@ -17,12 +18,13 @@ use cosmicgate_sol::{accounts::UpdateTask, instruction::UpdateTask as UpdateTask
 pub fn add_task(
     program: &Program<&Keypair>,
     payer: &Keypair,
-    node_seed: Pubkey,    
+    node_seed: Pubkey,
     metadata_url: String,
 ) -> Result<()> {
     let node = get_node_pub(program, node_seed).unwrap();
     let task_seed: Keypair = Keypair::new();
     println!("task seed {:?}", task_seed.pubkey());
+    let test_uuid = Uuid::new_v4().to_string();
     let task = get_task_pub(program, task_seed.pubkey()).unwrap();
 
     let (event_authority, _) = Pubkey::find_program_address(&[b"__event_authority"], &program.id());
@@ -41,6 +43,7 @@ pub fn add_task(
         .args(AddTaskArgs {
             node_seed: node_seed,
             task_seed: task_seed.pubkey(),
+            uuid: test_uuid,
             metadata_url: metadata_url,
         })
         .signer(payer)

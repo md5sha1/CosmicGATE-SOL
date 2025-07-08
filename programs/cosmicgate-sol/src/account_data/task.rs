@@ -4,10 +4,11 @@ use anchor_lang::prelude::*;
 #[derive(InitSpace, Debug)]
 pub struct Task {
     pub id: u64,
+    pub uuid: [u8; 16],
     pub task_seed: Pubkey,
     pub creator: Pubkey,
-    pub node_assigned: Pubkey,  // Use Pubkey::default() when no node is assigned    
-    pub node_seed: Pubkey,        
+    pub node_assigned: Pubkey, // Use Pubkey::default() when no node is assigned
+    pub node_seed: Pubkey,
     pub status: u8, //1: Assigned, 2: Completed, 3: Failed
     pub metadata_url: [u8; 200],
     pub bump: u8,
@@ -26,23 +27,33 @@ impl Task {
         bytes
     }
 
+    pub fn uuid_to_bytes(s: &str) -> [u8; 16] {
+        let mut bytes = [0u8; 16];
+        let s_bytes = s.as_bytes();
+        let len = s_bytes.len().min(16);
+        bytes[..len].copy_from_slice(&s_bytes[..len]);
+        bytes
+    }
+
     pub fn new(
         id: u64,
+        uuid: &str,
         task_seed: Pubkey,
-        creator: Pubkey,        
+        creator: Pubkey,
         node_assigned: Pubkey,
-        node_seed: Pubkey,                        
-        metadata_url: String,
+        node_seed: Pubkey,
+        metadata_url: &str,
         bump: u8,
     ) -> Self {
         Self {
             id,
+            uuid: Self::uuid_to_bytes(uuid),
             task_seed,
             creator,
             node_assigned,
             node_seed,
             status: 1, //Assigned
-            metadata_url: Self::string_to_bytes(&metadata_url),
+            metadata_url: Self::string_to_bytes(metadata_url),
             bump,
             _padding: [0; 6],
         }
@@ -61,6 +72,4 @@ impl Task {
             None
         }
     }
-
-
 }

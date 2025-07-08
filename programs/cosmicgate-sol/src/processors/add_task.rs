@@ -11,28 +11,31 @@ pub struct TaskEvent {
     pub node: Option<Pubkey>,
     pub node_seed: Option<Pubkey>,
     pub owner: Pubkey,
+    pub uuid: String,
     pub metadata_url: String,
 }
 
 pub fn exec(
     ctx: Context<AssignTask>,
-    node_seed: Pubkey,
+    node_seed: Pubkey,    
     task_seed: Pubkey,
+    uuid: String,
     metadata_url: String,
 ) -> Result<()> {
     let task = &mut ctx.accounts.task.load_init()?;
     let node = &mut ctx.accounts.node.load_mut()?;
     let state = &mut ctx.accounts.state.load_mut()?;
 
-    validate_node(node)?;
+    // validate_node(node)?;
 
     **task = Task::new(
         state.task_count,
+        &uuid,
         task_seed.key(),
         ctx.accounts.creator.key(),
         ctx.accounts.node.key(),
         node_seed.key(),
-        metadata_url.clone(),
+        &metadata_url,
         ctx.bumps.task,
     );
 
@@ -43,6 +46,7 @@ pub fn exec(
         node: Some(ctx.accounts.node.key()),
         node_seed: Some(node_seed),
         owner: ctx.accounts.creator.key(),
+        uuid,
         metadata_url,      
     });
 

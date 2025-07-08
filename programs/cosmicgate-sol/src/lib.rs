@@ -35,8 +35,8 @@ pub mod cosmicgate_sol {
         processors::register_node::exec(ctx, node_seed, cpu, memory, storage, os, arch)
     }
 
-    pub fn add_task(ctx: Context<AssignTask>, node_seed: Pubkey, task_seed: Pubkey, metadata_url: String) -> Result<()> {
-        processors::add_task::exec(ctx, node_seed, task_seed, metadata_url)
+    pub fn add_task(ctx: Context<AssignTask>, node_seed: Pubkey, task_seed: Pubkey, uuid: String, metadata_url: String) -> Result<()> {
+        processors::add_task::exec(ctx, node_seed, task_seed, uuid, metadata_url)
     }
 
     pub fn update_task(ctx: Context<UpdateTask>, task_id: u64, status: u8) -> Result<()> {
