@@ -15,7 +15,7 @@ use func::{node::get_node_info, state::{initialize, state_info}, task::{add_task
 use func::node::register_node;
 fn main() {
     let payer = read_keypair_file("../wallets/deployer_devnet.json").unwrap();
-    let client = Client::new_with_options(Cluster::Devnet, &payer, CommitmentConfig::confirmed());
+    let client = Client::new_with_options(Cluster::Localnet, &payer, CommitmentConfig::confirmed());
     let program = client.program(*func::config::PROGRAM_ID).unwrap();
 
     // let _ = initialize(&program, &payer);
@@ -24,7 +24,8 @@ fn main() {
     // let _ = register_node(&program, &payer);
     // let _ = get_node_info(&program, 0);
 
-    let node_seed = Pubkey::from_str("ETtubqgY8LFCS9dWdLUrCu2rVW5ht4jykYdhDKd3q7r2").unwrap();
-    let _ = add_task(&program, &payer, node_seed, "https://www.google.com".to_string());
-    // let _ = update_task(&program, &payer, 0, 0, 2);
+    let node_seed = Pubkey::from_str("HhMB89QmCzatJMoGnyEr6sBx3NNiMv1c5xQPfGRnMduZ").unwrap();
+    // let _ = add_task(&program, &payer, node_seed, "https://www.google.com".to_string());
+    let task_seed = Pubkey::from_str("6i9vgccsVcMXyycqSX5TrQN8p4YwFTy8UmTL22jdnhMU").unwrap();
+    let _ = update_task(&program, &payer, node_seed, task_seed, 2);
 }

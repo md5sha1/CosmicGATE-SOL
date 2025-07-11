@@ -3,19 +3,19 @@ use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 #[event_cpi]
-#[instruction(task_id: u64)]
+#[instruction(node_seed: Pubkey, task_seed: Pubkey)]
 pub struct UpdateTask<'info> {    
     #[account(mut)]
     pub state: AccountLoader<'info, State>,
 
     #[account(mut,        
         constraint = task.load()?.creator == creator.key(),
-        seeds = [b"task".as_ref(), state.key().as_ref(), task_id.to_string().as_ref()],
+        seeds = [b"task".as_ref(), state.key().as_ref(), task_seed.as_ref()],
         bump = task.load()?.bump,
     )]
     pub task: AccountLoader<'info, Task>,
 
-    #[account(mut, seeds = [b"node".as_ref(), state.key().as_ref(), task.load()?.node_seed.as_ref()], bump = node.load()?.bump)]
+    #[account(mut, seeds = [b"node".as_ref(), state.key().as_ref(), node_seed.as_ref()], bump)]
     pub node: AccountLoader<'info, Node>,
 
     #[account(mut)]

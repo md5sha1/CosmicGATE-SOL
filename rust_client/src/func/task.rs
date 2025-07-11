@@ -69,25 +69,27 @@ pub fn update_task(
 
     let (event_authority, _) = Pubkey::find_program_address(&[b"__event_authority"], &program.id());
 
-    // let tx = program
-    //     .request()
-    //     .accounts(UpdateTask {
-    //         state: *STATE,
-    //         node: node,
-    //         task: task,
-    //         creator: payer.pubkey(),
-    //         system_program: System::id(),
-    //         event_authority: event_authority,
-    //         program: program.id(),
-    //     })
-    //     .args(UpdateTaskArgs {
-    //         task_id: task_id,
-    //         status: status,
-    //     })
-    //     .signer(payer)
-    //     .send()
-    //     .expect("Failed to send transaction");
+    let tx = program
+        .request()
+        .accounts(UpdateTask {
+            state: *STATE,
+            node: node,
+            task: task,
+            creator: payer.pubkey(),
+            system_program: System::id(),
+            event_authority: event_authority,
+            program: program.id(),
+        })
+        .args(UpdateTaskArgs {
+            node_seed,
+            task_seed,
+            crc: "CRC Confirm Text".to_string(),
+            status,
+        })
+        .signer(payer)
+        .send()
+        .expect("Failed to send transaction");
 
-    // println!("Transaction: {}", tx.to_string());
+    println!("Transaction: {}", tx.to_string());
     Ok(())
 }
