@@ -15,5 +15,7 @@ pub enum ErrorCode {
     #[msg("Node not enough storage")]
     NodeNotEnoughStorage,
     #[msg("Cannot update task status")]
-    CannotUpdateTaskStatus
+    CannotUpdateTaskStatus,
+    #[msg("Uuid mismatch error")]
+    WrongUUID
 }

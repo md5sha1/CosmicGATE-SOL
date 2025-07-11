@@ -83,8 +83,9 @@ pub fn update_task(
         .args(UpdateTaskArgs {
             node_seed,
             task_seed,
-            crc: "CRC Confirm Text".to_string(),
+            crc: "CRC Confirm Text".to_string(),        
             status,
+            uuid: "uuid".to_string()
         })
         .signer(payer)
         .send()

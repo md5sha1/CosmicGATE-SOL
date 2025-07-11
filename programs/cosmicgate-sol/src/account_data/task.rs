@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 
+use crate::program_error::ErrorCode;
+
 #[account(zero_copy)]
 #[derive(InitSpace, Debug)]
 pub struct Task {
@@ -33,6 +35,14 @@ impl Task {
         let len = s_bytes.len().min(16);
         bytes[..len].copy_from_slice(&s_bytes[..len]);
         bytes
+    }
+
+    pub fn validate_uuid(&self, uuid: &str) -> Result<()> {
+        let uuid_to_check = Task::uuid_to_bytes(uuid);
+        if uuid_to_check[..] == self.uuid[..] {
+            return Ok(());
+        }
+        Err(ErrorCode::WrongUUID.into())
     }
 
     pub fn new(

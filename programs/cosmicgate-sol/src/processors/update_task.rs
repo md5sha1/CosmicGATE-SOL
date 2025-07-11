@@ -10,14 +10,16 @@ pub struct TaskUpdatedEvent {
     pub node_seed: Pubkey,
     pub owner: Pubkey,
     pub crc: String,
+    pub uuid: String,
     pub status: u8,
 }
 
-pub fn exec(ctx: Context<UpdateTask>, node_seed: Pubkey, task_seed: Pubkey, crc: String, status: u8) -> Result<()> {
+pub fn exec(ctx: Context<UpdateTask>, node_seed: Pubkey, task_seed: Pubkey, crc: String, status: u8, uuid: String) -> Result<()> {
     let task = &mut ctx.accounts.task.load_mut()?;
     let node = &mut ctx.accounts.node.load_mut()?;
 
-    validate_status(task.status, status)?;
+    validate_status(task.status, status)?;    
+    task.validate_uuid(&uuid)?;
 
     task.status = status;
     node.status = 0;
@@ -30,6 +32,7 @@ pub fn exec(ctx: Context<UpdateTask>, node_seed: Pubkey, task_seed: Pubkey, crc:
         node_seed: node_seed,
         owner: task.creator,
         crc,
+        uuid,
         status,
     });
     Ok(())
