@@ -12,7 +12,7 @@ pub struct TaskEvent {
     pub node_seed: Option<Pubkey>,
     pub owner: Pubkey,
     pub uuid: String,
-    pub metadata_url: String,
+    pub metadata_url: String,    
 }
 
 pub fn exec(
@@ -36,6 +36,7 @@ pub fn exec(
         ctx.accounts.node.key(),
         node_seed.key(),
         &metadata_url,
+        "",
         ctx.bumps.task,
     );
 

@@ -13,6 +13,7 @@ pub struct Task {
     pub node_seed: Pubkey,
     pub status: u8, //1: Assigned, 2: Completed, 3: Failed
     pub metadata_url: [u8; 200],
+    pub hash: [u8; 200],
     pub bump: u8,
     _padding: [u8; 6],
 }
@@ -53,6 +54,7 @@ impl Task {
         node_assigned: Pubkey,
         node_seed: Pubkey,
         metadata_url: &str,
+        hash: &str,
         bump: u8,
     ) -> Self {
         Self {
@@ -64,6 +66,7 @@ impl Task {
             node_seed,
             status: 1, //Assigned
             metadata_url: Self::string_to_bytes(metadata_url),
+            hash: Self::string_to_bytes(hash),
             bump,
             _padding: [0; 6],
         }
