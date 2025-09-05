@@ -1,3 +1,5 @@
+node_modules
 target
 wallets
 test-ledger
+package-lock.json

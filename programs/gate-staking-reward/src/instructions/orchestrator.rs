@@ -63,7 +63,7 @@ pub struct Slash<'info> {
     pub stake_token_account: Account<'info, TokenAccount>,
 
     /// CHECK: This is the treasury address
-    #[account(mut, address = orchestrator.treasury)]
+    #[account(mut)]
     pub treasury: AccountInfo<'info>,
 
     #[account(
@@ -128,7 +128,7 @@ pub fn slash(ctx: Context<Slash>) -> Result<()> {
     let stake_slash_amount = orchestrator.get_slash_amount(stake.amount)?;
     stake.amount -= stake_slash_amount;
 
-    let seeds = orchestrator.seeds();
+    let seeds = stake.seeds();
     let signer = &[&seeds[..]];
     if orchestrator.treasury != Pubkey::default() {
         let transfer_ctx = CpiContext::new_with_signer(
@@ -136,7 +136,7 @@ pub fn slash(ctx: Context<Slash>) -> Result<()> {
             Transfer {
                 from: ctx.accounts.stake_token_account.to_account_info(),
                 to: ctx.accounts.treasury_token_account.to_account_info(),
-                authority: ctx.accounts.treasury.to_account_info(),
+                authority: stake.to_account_info(),
             },
             signer,
         );
@@ -147,7 +147,7 @@ pub fn slash(ctx: Context<Slash>) -> Result<()> {
             Burn {
                 from: ctx.accounts.stake_token_account.to_account_info(),
                 mint: ctx.accounts.gate_mint.to_account_info(),
-                authority: ctx.accounts.treasury.to_account_info(),
+                authority: stake.to_account_info(),
             },
             signer,
         );

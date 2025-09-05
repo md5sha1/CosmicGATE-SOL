@@ -57,6 +57,7 @@ pub fn charge_reward(ctx: Context<ChargeReward>, amount: u64) -> Result<()> {
         },
     );
     token::transfer(transfer_ctx, amount)?;
+    rpool.amount += amount;
     msg!(
         "Reward pool charged {} by charger: {}",
         amount,

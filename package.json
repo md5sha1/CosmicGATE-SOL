@@ -1,5 +1,5 @@
 {
-  "license": "ISC",  
+  "license": "ISC",
   "scripts": {
     "deploy:devnet": "solana program deploy --with-compute-unit-price 1000000  --max-sign-attempts 1000 --url https://api.devnet.solana.com --keypair ./wallets/deployer_devnet.json --upgrade-authority ./wallets/deployer_devnet.json --program-id ./wallets/cosmicgate.json target/deploy/cosmicgate_sol.so",
     "resume:devnet": "solana program deploy --with-compute-unit-price 1000000  --max-sign-attempts 1000 --url https://api.devnet.solana.com --keypair ./wallets/deployer_devnet.json --upgrade-authority ./wallets/deployer_devnet.json --program-id ./wallets/cosmicgate.json target/deploy/cosmicgate_sol.so --buffer ./wallets/recovered-buffer.json",
@@ -13,6 +13,8 @@
     "@coral-xyz/anchor": "^0.30.1"
   },
   "devDependencies": {
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
     "chai": "^4.3.4",
     "mocha": "^9.0.3",
     "ts-mocha": "^10.0.0",

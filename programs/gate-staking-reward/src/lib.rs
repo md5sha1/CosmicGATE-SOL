@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("AnrMeVnPNjNokZ5vHaZBn8Hp6LyhPdz5XUiqgffLpVw8");
+declare_id!("GnyjinNSXdT82sJye6Y7gi1a8RtsLuWEzuHg2Qkhfqv9");
 
 mod instructions;
 mod state;
@@ -11,7 +11,7 @@ use instructions::orchestrator::*;
 use instructions::rpool::*;
 
 #[program]
-pub mod gate_staking {
+pub mod gate_staking_reward {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {

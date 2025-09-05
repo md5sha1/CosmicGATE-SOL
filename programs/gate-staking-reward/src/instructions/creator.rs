@@ -84,7 +84,7 @@ pub fn create_task_reward(ctx: Context<CreateTask>, task_id: u64) -> Result<()> 
         Transfer {
             from: ctx.accounts.rpool_token_account.to_account_info(),
             to: ctx.accounts.user_token_account.to_account_info(),
-            authority: ctx.accounts.signer.to_account_info(),
+            authority: rpool.to_account_info(),
         },
         signer,
     );

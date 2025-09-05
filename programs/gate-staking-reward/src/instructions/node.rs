@@ -174,7 +174,7 @@ pub fn submit_task_reward(ctx: Context<SubmitTaskResult>, _task_id: u64) -> Resu
         Transfer {
             from: ctx.accounts.rpool_token_account.to_account_info(),
             to: ctx.accounts.user_token_account.to_account_info(),
-            authority: ctx.accounts.operator.to_account_info(),
+            authority: rpool.to_account_info(),
         },
         signer,
     );
@@ -231,13 +231,16 @@ pub fn unstake(ctx: Context<ActUnstake>, amount: u64) -> Result<()> {
         stake.active = false;
     }
 
-    let transfer_ctx = CpiContext::new(
+    let seeds = stake.seeds();
+    let signer = &[&seeds[..]];
+    let transfer_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_program.to_account_info(),
         Transfer {
-            from: ctx.accounts.user_token_account.to_account_info(),
-            to: ctx.accounts.stake_token_account.to_account_info(),
-            authority: ctx.accounts.operator.to_account_info(),
+            from: ctx.accounts.stake_token_account.to_account_info(),
+            to: ctx.accounts.user_token_account.to_account_info(),
+            authority: stake.to_account_info(),
         },
+        signer,
     );
     token::transfer(transfer_ctx, amount)?;
     msg!(

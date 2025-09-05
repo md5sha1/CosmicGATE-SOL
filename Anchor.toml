@@ -7,12 +7,15 @@ skip-lint = false
 
 [programs.localnet]
 cosmicgate_sol = "4HT4D74NjcEAdM6qbCEkmFmec2qZyVEG4njfv5oavzje"
+gate_staking_reward = "GnyjinNSXdT82sJye6Y7gi1a8RtsLuWEzuHg2Qkhfqv9"
 
 [programs.devnet]
 cosmicgate_sol = "4HT4D74NjcEAdM6qbCEkmFmec2qZyVEG4njfv5oavzje"
+gate_staking_reward = "GnyjinNSXdT82sJye6Y7gi1a8RtsLuWEzuHg2Qkhfqv9"
 
 [programs.mainnet]
 cosmicgate_sol = "4HT4D74NjcEAdM6qbCEkmFmec2qZyVEG4njfv5oavzje"
+gate_staking_reward = "GnyjinNSXdT82sJye6Y7gi1a8RtsLuWEzuHg2Qkhfqv9"
 
 [registry]
 url = "https://api.apr.dev"
