@@ -1,14 +1,13 @@
 use anchor_lang::prelude::*;
 
-declare_id!("GnyjinNSXdT82sJye6Y7gi1a8RtsLuWEzuHg2Qkhfqv9");
+declare_id!("CKPRD8BmgaejmMBC55YzqqMDt834hSu8A2JezTxdnahM");
 
 mod instructions;
 mod state;
 
-use instructions::creator::*;
-use instructions::node::*;
 use instructions::orchestrator::*;
-use instructions::rpool::*;
+use instructions::rewards::*;
+use instructions::staking::*;
 
 #[program]
 pub mod gate_staking_reward {
@@ -46,23 +45,23 @@ pub mod gate_staking_reward {
         instructions::orchestrator::slash(ctx)
     }
 
-    pub fn create_task_reward(ctx: Context<CreateTask>, task_id: u64) -> Result<()> {
-        instructions::creator::create_task_reward(ctx, task_id)
+    pub fn create_task_reward(ctx: Context<CreateTaskReward>, task_id: u64) -> Result<()> {
+        instructions::rewards::create_task_reward(ctx, task_id)
     }
 
-    pub fn submit_task_reward(ctx: Context<SubmitTaskResult>, task_id: u64) -> Result<()> {
-        instructions::node::submit_task_reward(ctx, task_id)
-    }
-
-    pub fn stake(ctx: Context<ActStake>, amount: u64, lock_days: u64) -> Result<()> {
-        instructions::node::stake(ctx, amount, lock_days)
-    }
-
-    pub fn unstake(ctx: Context<ActUnstake>, amount: u64) -> Result<()> {
-        instructions::node::unstake(ctx, amount)
+    pub fn submit_task_reward(ctx: Context<SubmitTaskReward>, task_id: u64) -> Result<()> {
+        instructions::rewards::submit_task_reward(ctx, task_id)
     }
 
     pub fn charge_reward(ctx: Context<ChargeReward>, amount: u64) -> Result<()> {
-        instructions::rpool::charge_reward(ctx, amount)
+        instructions::rewards::charge_reward(ctx, amount)
+    }
+
+    pub fn stake(ctx: Context<ActStake>, amount: u64, lock_days: u64) -> Result<()> {
+        instructions::staking::stake(ctx, amount, lock_days)
+    }
+
+    pub fn unstake(ctx: Context<ActUnstake>, amount: u64) -> Result<()> {
+        instructions::staking::unstake(ctx, amount)
     }
 }

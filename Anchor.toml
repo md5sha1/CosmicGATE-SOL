@@ -7,15 +7,15 @@ skip-lint = false
 
 [programs.localnet]
 cosmicgate_sol = "4HT4D74NjcEAdM6qbCEkmFmec2qZyVEG4njfv5oavzje"
-gate_staking_reward = "GnyjinNSXdT82sJye6Y7gi1a8RtsLuWEzuHg2Qkhfqv9"
+gate_staking_reward = "CKPRD8BmgaejmMBC55YzqqMDt834hSu8A2JezTxdnahM"
 
 [programs.devnet]
 cosmicgate_sol = "4HT4D74NjcEAdM6qbCEkmFmec2qZyVEG4njfv5oavzje"
-gate_staking_reward = "GnyjinNSXdT82sJye6Y7gi1a8RtsLuWEzuHg2Qkhfqv9"
+gate_staking_reward = "CKPRD8BmgaejmMBC55YzqqMDt834hSu8A2JezTxdnahM"
 
 [programs.mainnet]
 cosmicgate_sol = "4HT4D74NjcEAdM6qbCEkmFmec2qZyVEG4njfv5oavzje"
-gate_staking_reward = "GnyjinNSXdT82sJye6Y7gi1a8RtsLuWEzuHg2Qkhfqv9"
+gate_staking_reward = "CKPRD8BmgaejmMBC55YzqqMDt834hSu8A2JezTxdnahM"
 
 [registry]
 url = "https://api.apr.dev"
@@ -26,3 +26,4 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "cargo test"
+script = "npx ts-node scripts/initialize.ts"
