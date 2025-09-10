@@ -12,16 +12,15 @@ pub struct CreateTaskReward<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
-    #[account(
-        mut,
-        seeds = [b"orchestrator"],
-        bump,
-    )]
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    #[account(mut, has_one = admin)]
     pub orchestrator: Account<'info, Orchestrator>,
 
     #[account(
         init_if_needed,
-        payer = signer,
+        payer = admin,
         space = Creator::LEN,
         seeds = [b"creator", signer.key().as_ref()],
         bump,
@@ -30,7 +29,7 @@ pub struct CreateTaskReward<'info> {
 
     #[account(
         init,
-        payer = signer,
+        payer = admin,
         space = Task::LEN,
         seeds = [b"task", task_id.to_le_bytes().as_ref()],
         bump,
@@ -52,7 +51,7 @@ pub struct CreateTaskReward<'info> {
 
     #[account(
         init_if_needed,
-        payer = signer,
+        payer = admin,
         associated_token::mint = gate_mint,
         associated_token::authority = signer
     )]

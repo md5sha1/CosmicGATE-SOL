@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { GateStakingReward } from "../target/types/gate_staking_reward";
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
 
@@ -36,7 +36,7 @@ async function main() {
     program.programId
   );
 
-  await program.methods
+  const ix = await program.methods
     .createTaskReward(taskId)
     .accountsPartial({
       signer: minter.publicKey,
@@ -52,8 +52,28 @@ async function main() {
       systemProgram: SystemProgram.programId,
       rent: anchor.web3.SYSVAR_RENT_PUBKEY,
     })
-    .signers([minter])
-    .rpc();
+    .instruction();
+
+  let tx = new Transaction().add(ix);
+  tx.partialSign(minter);
+
+  const backendProvider = new anchor.AnchorProvider(provider.connection, minter, {
+    commitment: "confirmed",
+  });
+  const backend = Keypair.generate();
+  tx = await new anchor.Wallet(backend).signTransaction(tx);
+  const txSig = await backendProvider.connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+  const latestBlockhash = await backendProvider.connection.getLatestBlockhash();
+  await backendProvider.connection.confirmTransaction(
+    {
+      signature: txSig,
+      blockhash: latestBlockhash.blockhash,
+      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    },
+    "confirmed"
+  );
+  const txHash = await backendProvider.sendAndConfirm(tx);
+  console.log("Transaction hash:", txHash);
 
   const task = await program.account.task.fetch(taskPDA);
   console.log(task.completed);
