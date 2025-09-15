@@ -182,6 +182,12 @@ pub fn create_task_reward(ctx: Context<CreateTaskReward>, task_id: u64) -> Resul
         signer,
     );
     token::transfer(transfer_ctx, amount)?;
+
+    if rpool.amount < amount {
+        msg!("Reward pool balance is not enough");
+        return Err(ErrorCode::NotEnoughFunds.into());
+    }
+
     rpool.amount -= amount;
     msg!(
         "Task {} is created by {} and creator is rewarded with {} GATE",
