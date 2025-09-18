@@ -86,6 +86,12 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
     Ok(())
 }
 
+pub fn set_admin(ctx: Context<SetValues>, admin: Pubkey) -> Result<()> {
+    let orchestrator = &mut ctx.accounts.orchestrator;
+    orchestrator.set_admin(admin)?;
+    Ok(())
+}
+
 pub fn set_sol_price(ctx: Context<SetValues>, sol_price: u64) -> Result<()> {
     let orchestrator = &mut ctx.accounts.orchestrator;
     orchestrator.set_sol_price(sol_price)?;

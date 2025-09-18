@@ -25,6 +25,11 @@ impl Orchestrator {
         Ok(())
     }
 
+    pub fn set_admin(&mut self, admin: Pubkey) -> Result<()> {
+        self.admin = admin;
+        Ok(())
+    }
+
     pub fn set_sol_price(&mut self, sol_price: u64) -> Result<()> {
         self.sol_price = sol_price;
         Ok(())

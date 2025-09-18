@@ -10,7 +10,4 @@ pub enum ErrorCode {
 
     #[msg("Task already completed")]
     TaskAlreadyCompleted,
-
-    #[msg("Not enough funds to pay reward")]
-    NotEnoughFunds,
 }

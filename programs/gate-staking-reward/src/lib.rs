@@ -17,6 +17,10 @@ pub mod gate_staking_reward {
         instructions::orchestrator::initialize(ctx)
     }
 
+    pub fn set_admin(ctx: Context<SetValues>, admin: Pubkey) -> Result<()> {
+        instructions::orchestrator::set_admin(ctx, admin)
+    }
+
     pub fn set_sol_price(ctx: Context<SetValues>, sol_price: u64) -> Result<()> {
         instructions::orchestrator::set_sol_price(ctx, sol_price)
     }
