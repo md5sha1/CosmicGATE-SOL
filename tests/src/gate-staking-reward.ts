@@ -9,7 +9,7 @@ import {
   getOrCreateAssociatedTokenAccount,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import { PublicKey, Keypair, LAMPORTS_PER_SOL, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Keypair, LAMPORTS_PER_SOL, SystemProgram, Transaction } from "@solana/web3.js";
 import { expect } from "chai";
 import { GateStakingReward } from "../target/types/gate_staking_reward";
 
@@ -106,10 +106,10 @@ describe("gate-staking-reward", () => {
       program.programId
     );
 
-    await program.methods
+    const ix = await program.methods
       .createTaskReward(taskId)
       .accountsPartial({
-        signer: creator.publicKey,
+        creatorInfo: creator.publicKey,
         orchestrator: orchestratorPDA,
         creator: creatorPDA,
         task: taskPDA,
@@ -122,8 +122,28 @@ describe("gate-staking-reward", () => {
         systemProgram: SystemProgram.programId,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
-      .signers([creator])
-      .rpc();
+      .instruction();
+
+    let tx = new Transaction().add(ix);
+    tx.partialSign(admin.payer);
+
+    const backendProvider = new anchor.AnchorProvider(provider.connection, admin.payer, {
+      commitment: "confirmed",
+    });
+    const backend = Keypair.generate();
+    tx = await new anchor.Wallet(backend).signTransaction(tx);
+    const txSig = await backendProvider.connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+    const latestBlockhash = await backendProvider.connection.getLatestBlockhash();
+    await backendProvider.connection.confirmTransaction(
+      {
+        signature: txSig,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      },
+      "confirmed"
+    );
+    const txHash = await backendProvider.sendAndConfirm(tx);
+    console.log("Transaction hash:", txHash);
 
     const task = await program.account.task.fetch(taskPDA);
     expect(task.completed).to.be.equal(false);

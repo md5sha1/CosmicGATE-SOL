@@ -39,7 +39,7 @@ async function main() {
   const ix = await program.methods
     .createTaskReward(taskId)
     .accountsPartial({
-      signer: minter.publicKey,
+      creatorInfo: minter.publicKey,
       orchestrator: orchestratorPDA,
       creator: creatorPDA,
       task: taskPDA,

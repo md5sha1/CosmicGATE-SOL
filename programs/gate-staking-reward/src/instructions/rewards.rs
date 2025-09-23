@@ -10,10 +10,11 @@ use crate::state::{creator::Creator, orchestrator::Orchestrator, rpool::RewardPo
 #[instruction(task_id: u64)]
 pub struct CreateTaskReward<'info> {
     #[account(mut)]
-    pub signer: Signer<'info>,
-
-    #[account(mut)]
     pub admin: Signer<'info>,
+
+    /// CHECK: This is the creator address
+    #[account(mut)]
+    pub creator_info: AccountInfo<'info>,
 
     #[account(mut, has_one = admin)]
     pub orchestrator: Account<'info, Orchestrator>,
@@ -22,7 +23,7 @@ pub struct CreateTaskReward<'info> {
         init_if_needed,
         payer = admin,
         space = Creator::LEN,
-        seeds = [b"creator", signer.key().as_ref()],
+        seeds = [b"creator", creator_info.key().as_ref()],
         bump,
     )]
     pub creator: Account<'info, Creator>,
@@ -53,7 +54,7 @@ pub struct CreateTaskReward<'info> {
         init_if_needed,
         payer = admin,
         associated_token::mint = gate_mint,
-        associated_token::authority = signer
+        associated_token::authority = creator_info
     )]
     pub user_token_account: Account<'info, TokenAccount>,
 
@@ -159,10 +160,10 @@ pub struct ChargeReward<'info> {
 
 pub fn create_task_reward(ctx: Context<CreateTaskReward>, task_id: u64) -> Result<()> {
     let task = &mut ctx.accounts.task;
-    task.initialize(task_id, ctx.accounts.signer.key(), ctx.bumps.task)?;
+    task.initialize(task_id, ctx.accounts.creator_info.key(), ctx.bumps.task)?;
 
     let creator = &mut ctx.accounts.creator;
-    creator.initialize(ctx.accounts.signer.key(), ctx.bumps.creator)?;
+    creator.initialize(ctx.accounts.creator_info.key(), ctx.bumps.creator)?;
     creator.image_count += 1;
 
     let decimals = ctx.accounts.gate_mint.decimals;
