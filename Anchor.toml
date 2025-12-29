@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-nft_prediction_stake = "DddAu1n7DHrQHwmUmTe1LqWW7DCoR2XVxtxYcVoM3XSF"
+nft_prediction_stake = "51DFYj5Evdk3TnbipTmscxwt4HvJiYq5d3cfdriEEvqm"
 
 [registry]
 url = "https://api.apr.dev"

@@ -4,7 +4,7 @@ use anchor_spl::{
     token::{self, Mint, Token, TokenAccount, Transfer},
 };
 
-declare_id!("DddAu1n7DHrQHwmUmTe1LqWW7DCoR2XVxtxYcVoM3XSF"); // replace
+declare_id!("51DFYj5Evdk3TnbipTmscxwt4HvJiYq5d3cfdriEEvqm");
 
 // ----------------------------
 // Program
