@@ -8,15 +8,19 @@
  */
 
 import * as anchor from "@coral-xyz/anchor";
-import { Program, BN } from "@coral-xyz/anchor";
-import { NftPredictionStakeV1 } from "../target/types/nft_prediction_stake_v1";
+import { Program, BN, AnchorProvider, Wallet } from "@coral-xyz/anchor";
 import {
   getAssociatedTokenAddressSync,
   getOrCreateAssociatedTokenAccount,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { PublicKey, SystemProgram, Connection, Keypair } from "@solana/web3.js";
+import * as fs from "fs";
+import * as os from "os";
+
+// Import the IDL
+import idl from "../target/idl/nft_prediction_stake_v1.json";
 
 // ===========================================
 // CONFIGURATION
@@ -25,8 +29,36 @@ import { PublicKey, SystemProgram } from "@solana/web3.js";
 // Program ID (deployed on devnet)
 const PROGRAM_ID = new PublicKey("51DFYj5Evdk3TnbipTmscxwt4HvJiYq5d3cfdriEEvqm");
 
-// tGATE token mint (get this from the treasury)
-let TGATE_MINT: PublicKey;
+// tGATE token mint
+const TGATE_MINT = new PublicKey("AaTtdiALQ2QUchCAXP49VEsCTtQrj2TJtVzh8LghZSkb");
+
+// Devnet RPC URL
+const RPC_URL = "https://api.devnet.solana.com";
+
+// Path to your wallet keypair
+const WALLET_PATH = os.homedir() + "/.config/solana/id.json";
+
+// ===========================================
+// HELPER: Load wallet and create provider
+// ===========================================
+
+function getProvider(): { provider: AnchorProvider; user: Keypair } {
+  const walletKeypair = Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(fs.readFileSync(WALLET_PATH, "utf-8")))
+  );
+  
+  const connection = new Connection(RPC_URL, "confirmed");
+  const wallet = new Wallet(walletKeypair);
+  const provider = new AnchorProvider(connection, wallet, { commitment: "confirmed" });
+  
+  anchor.setProvider(provider);
+  
+  return { provider, user: walletKeypair };
+}
+
+function getProgram(provider: AnchorProvider): Program {
+  return new Program(idl as any, provider);
+}
 
 // ===========================================
 // USER FUNCTIONS
@@ -48,10 +80,8 @@ async function stakeNft(
   estimatedSolValue: number,
   prediction: boolean
 ) {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-  const program = anchor.workspace.nftPredictionStakeV1 as Program<NftPredictionStakeV1>;
-  const user = (provider.wallet as anchor.Wallet).payer;
+  const { provider, user } = getProvider();
+  const program = getProgram(provider);
 
   const matchIdBN = new BN(matchId);
   const solValueLamports = new BN(estimatedSolValue * 1_000_000_000);
@@ -59,7 +89,7 @@ async function stakeNft(
   // Derive PDAs
   const [matchPoolPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
-    program.programId
+    PROGRAM_ID
   );
 
   const [stakeRecordPda] = PublicKey.findProgramAddressSync(
@@ -68,7 +98,7 @@ async function stakeNft(
       matchIdBN.toArrayLike(Buffer, "le", 8),
       nftMint.toBuffer(),
     ],
-    program.programId
+    PROGRAM_ID
   );
 
   const [userPositionPda] = PublicKey.findProgramAddressSync(
@@ -77,7 +107,7 @@ async function stakeNft(
       matchIdBN.toArrayLike(Buffer, "le", 8),
       user.publicKey.toBuffer(),
     ],
-    program.programId
+    PROGRAM_ID
   );
 
   const userNftAta = getAssociatedTokenAddressSync(nftMint, user.publicKey);
@@ -124,25 +154,21 @@ async function stakeNft(
  * This returns your NFT AND gives you tGATE rewards
  */
 async function claimReward(matchId: number, nftMint: PublicKey) {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-  const program = anchor.workspace.nftPredictionStakeV1 as Program<NftPredictionStakeV1>;
-  const user = (provider.wallet as anchor.Wallet).payer;
+  const { provider, user } = getProvider();
+  const program = getProgram(provider);
 
   const matchIdBN = new BN(matchId);
 
-  // Get treasury to find tGATE mint
+  // Treasury PDA
   const [treasuryPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("treasury")],
-    program.programId
+    PROGRAM_ID
   );
-  const treasury = await program.account.treasury.fetch(treasuryPda);
-  TGATE_MINT = treasury.gateMint;
 
   // Derive PDAs
   const [matchPoolPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
-    program.programId
+    PROGRAM_ID
   );
 
   const [stakeRecordPda] = PublicKey.findProgramAddressSync(
@@ -151,7 +177,7 @@ async function claimReward(matchId: number, nftMint: PublicKey) {
       matchIdBN.toArrayLike(Buffer, "le", 8),
       nftMint.toBuffer(),
     ],
-    program.programId
+    PROGRAM_ID
   );
 
   const userNftAta = getAssociatedTokenAddressSync(nftMint, user.publicKey);
@@ -197,17 +223,15 @@ async function claimReward(matchId: number, nftMint: PublicKey) {
  * You get your NFT back, but no rewards
  */
 async function unstakeLoser(matchId: number, nftMint: PublicKey) {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-  const program = anchor.workspace.nftPredictionStakeV1 as Program<NftPredictionStakeV1>;
-  const user = (provider.wallet as anchor.Wallet).payer;
+  const { provider, user } = getProvider();
+  const program = getProgram(provider);
 
   const matchIdBN = new BN(matchId);
 
   // Derive PDAs
   const [matchPoolPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
-    program.programId
+    PROGRAM_ID
   );
 
   const [stakeRecordPda] = PublicKey.findProgramAddressSync(
@@ -216,7 +240,7 @@ async function unstakeLoser(matchId: number, nftMint: PublicKey) {
       matchIdBN.toArrayLike(Buffer, "le", 8),
       nftMint.toBuffer(),
     ],
-    program.programId
+    PROGRAM_ID
   );
 
   const userNftAta = getAssociatedTokenAddressSync(nftMint, user.publicKey);
@@ -246,9 +270,8 @@ async function unstakeLoser(matchId: number, nftMint: PublicKey) {
  * View your stake on a match
  */
 async function viewMyStake(matchId: number, nftMint: PublicKey) {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-  const program = anchor.workspace.nftPredictionStakeV1 as Program<NftPredictionStakeV1>;
+  const { provider } = getProvider();
+  const program = getProgram(provider);
 
   const matchIdBN = new BN(matchId);
 
@@ -258,11 +281,11 @@ async function viewMyStake(matchId: number, nftMint: PublicKey) {
       matchIdBN.toArrayLike(Buffer, "le", 8),
       nftMint.toBuffer(),
     ],
-    program.programId
+    PROGRAM_ID
   );
 
   try {
-    const stake = await program.account.stakeRecord.fetch(stakeRecordPda);
+    const stake = await (program.account as any).stakeRecord.fetch(stakeRecordPda);
     
     console.log(`\n=== Your Stake on Match #${matchId} ===`);
     console.log("   NFT Mint:", stake.nftMint.toBase58());

@@ -9,15 +9,19 @@
  */
 
 import * as anchor from "@coral-xyz/anchor";
-import { Program, BN } from "@coral-xyz/anchor";
-import { NftPredictionStakeV1 } from "../target/types/nft_prediction_stake_v1";
+import { Program, BN, AnchorProvider, Wallet } from "@coral-xyz/anchor";
 import {
   getAssociatedTokenAddressSync,
   getOrCreateAssociatedTokenAccount,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { PublicKey, SystemProgram, Connection, Keypair } from "@solana/web3.js";
+import * as fs from "fs";
+import * as os from "os";
+
+// Import the IDL
+import idl from "../target/idl/nft_prediction_stake_v1.json";
 
 // ===========================================
 // CONFIGURATION - CHANGE THESE VALUES
@@ -29,27 +33,59 @@ const TGATE_MINT = new PublicKey("AaTtdiALQ2QUchCAXP49VEsCTtQrj2TJtVzh8LghZSkb")
 // Your program ID (deployed on devnet)
 const PROGRAM_ID = new PublicKey("51DFYj5Evdk3TnbipTmscxwt4HvJiYq5d3cfdriEEvqm");
 
+// Devnet RPC URL
+const RPC_URL = "https://api.devnet.solana.com";
+
+// Path to your wallet keypair
+const WALLET_PATH = os.homedir() + "/.config/solana/id.json";
+
+// ===========================================
+// HELPER: Load wallet and create provider
+// ===========================================
+
+function getProvider(): { provider: AnchorProvider; admin: Keypair } {
+  // Load wallet keypair
+  const walletKeypair = Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(fs.readFileSync(WALLET_PATH, "utf-8")))
+  );
+  
+  // Create connection
+  const connection = new Connection(RPC_URL, "confirmed");
+  
+  // Create wallet
+  const wallet = new Wallet(walletKeypair);
+  
+  // Create provider
+  const provider = new AnchorProvider(connection, wallet, {
+    commitment: "confirmed",
+  });
+  
+  anchor.setProvider(provider);
+  
+  return { provider, admin: walletKeypair };
+}
+
+function getProgram(provider: AnchorProvider): Program {
+  return new Program(idl as any, provider);
+}
+
 // ===========================================
 // SETUP
 // ===========================================
 
 async function main() {
-  // Connect to devnet
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-
-  const program = anchor.workspace.nftPredictionStakeV1 as Program<NftPredictionStakeV1>;
-  const admin = provider.wallet;
+  const { provider, admin } = getProvider();
+  const program = getProgram(provider);
 
   console.log("=== CosmicGATE Admin Panel ===");
   console.log("Admin wallet:", admin.publicKey.toBase58());
-  console.log("Program ID:", program.programId.toBase58());
+  console.log("Program ID:", PROGRAM_ID.toBase58());
   console.log("tGATE Mint:", TGATE_MINT.toBase58());
 
   // Derive treasury PDA
   const [treasuryPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("treasury")],
-    program.programId
+    PROGRAM_ID
   );
   console.log("\nTreasury PDA:", treasuryPda.toBase58());
 
@@ -57,7 +93,7 @@ async function main() {
   const treasuryInfo = await provider.connection.getAccountInfo(treasuryPda);
   
   if (treasuryInfo) {
-    const treasury = await program.account.treasury.fetch(treasuryPda);
+    const treasury = await (program.account as any).treasury.fetch(treasuryPda);
     console.log("\n⚠️  Treasury already exists!");
     console.log("   Admin:", treasury.admin.toBase58());
     console.log("   Gate Mint:", treasury.gateMint.toBase58());
@@ -81,14 +117,12 @@ async function main() {
  * This sets YOUR tGATE token as the reward token
  */
 async function initializeTreasury() {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-  const program = anchor.workspace.nftPredictionStakeV1 as Program<NftPredictionStakeV1>;
-  const admin = (provider.wallet as anchor.Wallet).payer;
+  const { provider, admin } = getProvider();
+  const program = getProgram(provider);
 
   const [treasuryPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("treasury")],
-    program.programId
+    PROGRAM_ID
   );
 
   const treasuryGateAta = getAssociatedTokenAddressSync(
@@ -123,16 +157,14 @@ async function initializeTreasury() {
  * Call this for each esports match you want to create
  */
 async function createMatchPool(matchId: number, maxNftsPerUser: number = 3) {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-  const program = anchor.workspace.nftPredictionStakeV1 as Program<NftPredictionStakeV1>;
-  const admin = (provider.wallet as anchor.Wallet).payer;
+  const { provider, admin } = getProvider();
+  const program = getProgram(provider);
 
   const matchIdBN = new BN(matchId);
   
   const [matchPoolPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
-    program.programId
+    PROGRAM_ID
   );
 
   console.log(`Creating match pool #${matchId}...`);
@@ -160,22 +192,25 @@ async function createMatchPool(matchId: number, maxNftsPerUser: number = 3) {
  * You need tGATE in your wallet to do this
  */
 async function fundMatchPool(matchId: number, amountTGATE: number) {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-  const program = anchor.workspace.nftPredictionStakeV1 as Program<NftPredictionStakeV1>;
-  const admin = (provider.wallet as anchor.Wallet).payer;
+  const { provider, admin } = getProvider();
+  const program = getProgram(provider);
 
   const matchIdBN = new BN(matchId);
-  const amount = new BN(amountTGATE * 1_000_000_000); // Convert to lamports (9 decimals)
+  // CHANGE THIS based on your tGATE decimals:
+  // - 9 decimals: multiply by 1_000_000_000
+  // - 6 decimals: multiply by 1_000_000
+  // - 0 decimals: multiply by 1
+  const TGATE_DECIMALS = 6; // ← CHANGE THIS to match your token!
+  const amount = new BN(amountTGATE * Math.pow(10, TGATE_DECIMALS));
 
   const [treasuryPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("treasury")],
-    program.programId
+    PROGRAM_ID
   );
   
   const [matchPoolPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
-    program.programId
+    PROGRAM_ID
   );
 
   const adminGateAta = getAssociatedTokenAddressSync(TGATE_MINT, admin.publicKey);
@@ -206,16 +241,14 @@ async function fundMatchPool(matchId: number, amountTGATE: number) {
  * outcome: true = YES wins, false = NO wins
  */
 async function resolveMatch(matchId: number, outcome: boolean) {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-  const program = anchor.workspace.nftPredictionStakeV1 as Program<NftPredictionStakeV1>;
-  const admin = (provider.wallet as anchor.Wallet).payer;
+  const { provider, admin } = getProvider();
+  const program = getProgram(provider);
 
   const matchIdBN = new BN(matchId);
   
   const [matchPoolPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
-    program.programId
+    PROGRAM_ID
   );
 
   console.log(`Resolving match #${matchId}...`);
@@ -237,24 +270,23 @@ async function resolveMatch(matchId: number, outcome: boolean) {
  * View match pool status
  */
 async function viewMatchPool(matchId: number) {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-  const program = anchor.workspace.nftPredictionStakeV1 as Program<NftPredictionStakeV1>;
+  const { provider } = getProvider();
+  const program = getProgram(provider);
 
   const matchIdBN = new BN(matchId);
   
   const [matchPoolPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
-    program.programId
+    PROGRAM_ID
   );
 
   try {
-    const matchPool = await program.account.matchPool.fetch(matchPoolPda);
+    const matchPool = await (program.account as any).matchPool.fetch(matchPoolPda);
     
     console.log(`\n=== Match Pool #${matchId} ===`);
     console.log("   PDA:", matchPoolPda.toBase58());
     console.log("   Admin:", matchPool.admin.toBase58());
-    console.log("   Prize Pool:", matchPool.prizePool.toNumber() / 1_000_000_000, "tGATE");
+    console.log("   Prize Pool:", matchPool.prizePool.toNumber() / 1_000_000, "tGATE");
     console.log("   Total YES Weight:", matchPool.totalYesWeight.toString());
     console.log("   Total NO Weight:", matchPool.totalNoWeight.toString());
     console.log("   Resolved:", matchPool.resolved);
@@ -271,12 +303,12 @@ async function viewMatchPool(matchId: number) {
 
 // Uncomment the function you want to run:
 
-main();
+// main();
 
-// initializeTreasury();
-// createMatchPool(1001, 3);  // Match ID 1001, max 3 NFTs per user
-// fundMatchPool(1001, 100);  // Fund match 1001 with 100 tGATE
+// initializeTreasury();  // ← RUN THIS FIRST!
+// createMatchPool(1001, 1);  // Match ID 1001, max 3 NFTs per user
+// fundMatchPool(1001, 100);  // Fund match 1001 with 10 tGATE (you have 500)
 // resolveMatch(1001, true);  // Match 1001: YES wins
-// viewMatchPool(1001);
+viewMatchPool(1001);
 
 
