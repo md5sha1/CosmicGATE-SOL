@@ -302,24 +302,24 @@ async function viewMyStake(matchId: number, nftMint: PublicKey) {
 // EXAMPLE USAGE
 // ===========================================
 
-/*
+
 // 1. Stake your NFT on match #1001, betting YES
-stakeNft(
-  1001,                                                    // Match ID
-  new PublicKey("YOUR_NFT_MINT_ADDRESS"),                 // Your NFT mint
-  "common",                                                // Tier
-  2.5,                                                     // Estimated 2.5 SOL value
-  true                                                     // Prediction: YES wins
-);
+// stakeNft(
+//   1001,                                                    // Match ID
+//   new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"),                 // Your NFT mint
+//   "punk",                                                // Tier
+//   1.2,                                                     // Estimated 2.5 SOL value
+//   false                                                     // Prediction: YES wins
+// );
 
 // 2. After match resolves, claim if you won
-claimReward(1001, new PublicKey("YOUR_NFT_MINT_ADDRESS"));
+claimReward(1001, new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"));
 
 // 3. Or unstake if you lost
-unstakeLoser(1001, new PublicKey("YOUR_NFT_MINT_ADDRESS"));
+// unstakeLoser(1001, new PublicKey("YOUR_NFT_MINT_ADDRESS"));
 
 // 4. View your stake
-viewMyStake(1001, new PublicKey("YOUR_NFT_MINT_ADDRESS"));
-*/
+// viewMyStake(1001, new PublicKey("YOUR_NFT_MINT_ADDRESS"));
+
 
 

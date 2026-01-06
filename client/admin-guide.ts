@@ -24,6 +24,81 @@ import * as os from "os";
 import idl from "../target/idl/nft_prediction_stake_v1.json";
 
 // ===========================================
+// QUERY FUNCTIONS - Check who is admin
+// ===========================================
+
+async function getTreasuryAdmin(): Promise<string | null> {
+  const { provider, admin } = getProvider();
+  const program = new Program(idl as any, provider);
+  
+  const [treasuryPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("treasury")],
+    PROGRAM_ID
+  );
+
+  try {
+    const treasury = await (program.account as any).treasury.fetch(treasuryPda);
+    console.log("=== Treasury Info ===");
+    console.log("Treasury PDA:", treasuryPda.toBase58());
+    console.log("Treasury Admin:", treasury.admin.toBase58());
+    console.log("tGATE Mint:", treasury.gateMint.toBase58());
+    return treasury.admin.toBase58();
+  } catch (e) {
+    console.log("Treasury not initialized yet");
+    return null;
+  }
+}
+
+async function getMatchAdmin(matchId: number): Promise<string | null> {
+  const { provider } = getProvider();
+  const program = new Program(idl as any, provider);
+  
+  const matchIdBN = new BN(matchId);
+  const [matchPoolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
+    PROGRAM_ID
+  );
+
+  try {
+    const matchPool = await (program.account as any).matchPool.fetch(matchPoolPda);
+    console.log(`=== Match #${matchId} Info ===`);
+    console.log("Match Pool PDA:", matchPoolPda.toBase58());
+    console.log("Match Admin:", matchPool.admin.toBase58());
+    console.log("Prize Pool:", matchPool.prizePool.toString());
+    console.log("Resolved:", matchPool.resolved);
+    return matchPool.admin.toBase58();
+  } catch (e) {
+    console.log(`Match #${matchId} not found`);
+    return null;
+  }
+}
+
+async function checkAllAdmins(matchId: number) {
+  const { admin } = getProvider();
+  console.log("\n=== Admin Check ===");
+  console.log("Your Wallet:", admin.publicKey.toBase58());
+  
+  const treasuryAdmin = await getTreasuryAdmin();
+  const matchAdmin = await getMatchAdmin(matchId);
+  
+  console.log("\n=== Permissions ===");
+  console.log("You are Treasury Admin:", treasuryAdmin === admin.publicKey.toBase58() ? "✅ YES" : "❌ NO");
+  console.log("You are Match Admin:", matchAdmin === admin.publicKey.toBase58() ? "✅ YES" : "❌ NO");
+  
+  if (treasuryAdmin === admin.publicKey.toBase58() && matchAdmin === admin.publicKey.toBase58()) {
+    console.log("\n✅ You CAN fund this match!");
+  } else {
+    console.log("\n❌ You CANNOT fund this match.");
+    if (treasuryAdmin !== admin.publicKey.toBase58()) {
+      console.log("   - You are not the treasury admin");
+    }
+    if (matchAdmin !== admin.publicKey.toBase58()) {
+      console.log("   - You are not the match admin");
+    }
+  }
+}
+
+// ===========================================
 // CONFIGURATION - CHANGE THESE VALUES
 // ===========================================
 
@@ -231,7 +306,7 @@ async function fundMatchPool(matchId: number, amountTGATE: number) {
     })
     .rpc();
 
-  console.log("✅ Match pool funded!");
+  console.log("   Match pool funded!");
   console.log("   Amount:", amountTGATE, "tGATE");
   console.log("   Transaction:", tx);
 }
@@ -262,7 +337,7 @@ async function resolveMatch(matchId: number, outcome: boolean) {
     })
     .rpc();
 
-  console.log("✅ Match resolved!");
+  console.log(" Match resolved!");
   console.log("   Transaction:", tx);
 }
 
@@ -303,12 +378,14 @@ async function viewMatchPool(matchId: number) {
 
 // Uncomment the function you want to run:
 
-// main();
+// === QUERY FUNCTIONS (Read-only) ===
+// getTreasuryAdmin();           // Who is the treasury admin?
+// getMatchAdmin(1001);          // Who is the admin of match #1001?
+// checkAllAdmins(1001);          // Check your permissions for match #1001
 
-// initializeTreasury();  // ← RUN THIS FIRST!
-// createMatchPool(1001, 1);  // Match ID 1001, max 3 NFTs per user
-// fundMatchPool(1001, 100);  // Fund match 1001 with 10 tGATE (you have 500)
-// resolveMatch(1001, true);  // Match 1001: YES wins
-viewMatchPool(1001);
-
-
+// === ACTION FUNCTIONS ===
+// initializeTreasury();         // Run this FIRST!
+// createMatchPool(1002, 3);     // Create match #1001, max 3 NFTs per user
+// fundMatchPool(1002, 100);     // Fund match #1001 with 100 tGATE
+resolveMatch(1002, true);     // Resolve match #1001: YES wins
+// viewMatchPool(1001);          // View match #1001 details
