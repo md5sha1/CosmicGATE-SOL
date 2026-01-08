@@ -4,7 +4,7 @@ use anchor_spl::{
     token::{self, Mint, Token, TokenAccount, Transfer},
 };
 
-declare_id!("51DFYj5Evdk3TnbipTmscxwt4HvJiYq5d3cfdriEEvqm");
+declare_id!("2fc9qnqLvvt6eHQpbpYVcoUarWmgTzJY82PcC5Z14gWJ");
 
 // ----------------------------
 // Program
@@ -349,12 +349,17 @@ pub struct InitMatchPool<'info> {
 
 #[derive(Accounts)]
 pub struct FundMatchPool<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"match_pool", match_pool.match_id.to_le_bytes().as_ref()],
+        bump = match_pool.bump
+    )]
     pub match_pool: Account<'info, MatchPool>,
 
     #[account(seeds = [b"treasury"], bump = treasury.bump)]
     pub treasury: Account<'info, Treasury>,
 
+    #[account(constraint = gate_mint.key() == treasury.gate_mint)]
     pub gate_mint: Account<'info, Mint>,
 
     #[account(mut, associated_token::mint = gate_mint, associated_token::authority = treasury)]
@@ -415,7 +420,11 @@ pub struct StakeNft<'info> {
 
 #[derive(Accounts)]
 pub struct ResolveMatch<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"match_pool", match_pool.match_id.to_le_bytes().as_ref()],
+        bump = match_pool.bump
+    )]
     pub match_pool: Account<'info, MatchPool>,
     #[account(mut)]
     pub admin: Signer<'info>,
@@ -423,6 +432,10 @@ pub struct ResolveMatch<'info> {
 
 #[derive(Accounts)]
 pub struct ClaimReward<'info> {
+    #[account(
+        seeds = [b"match_pool", match_pool.match_id.to_le_bytes().as_ref()],
+        bump = match_pool.bump
+    )]
     pub match_pool: Account<'info, MatchPool>,
 
     #[account(
@@ -444,6 +457,7 @@ pub struct ClaimReward<'info> {
     #[account(seeds = [b"treasury"], bump = treasury.bump)]
     pub treasury: Account<'info, Treasury>,
 
+    #[account(constraint = gate_mint.key() == treasury.gate_mint)]
     pub gate_mint: Account<'info, Mint>,
 
     #[account(mut, associated_token::mint = gate_mint, associated_token::authority = treasury)]
@@ -460,6 +474,10 @@ pub struct ClaimReward<'info> {
 
 #[derive(Accounts)]
 pub struct UnstakeLoser<'info> {
+    #[account(
+        seeds = [b"match_pool", match_pool.match_id.to_le_bytes().as_ref()],
+        bump = match_pool.bump
+    )]
     pub match_pool: Account<'info, MatchPool>,
 
     #[account(
