@@ -23,6 +23,7 @@ custom-panic = []
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
 anchor-spl = "0.32.1"
+mpl-token-metadata = "5.0.0-beta.0"
 
 
 [lints.rust]

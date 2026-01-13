@@ -1,7 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{self, Mint, Token, TokenAccount, Transfer},
+    token::{self, Approve, Mint, Revoke, Token, TokenAccount, Transfer},
+};
+use mpl_token_metadata::instructions::{
+    FreezeDelegatedAccountCpi, FreezeDelegatedAccountCpiAccounts,
+    ThawDelegatedAccountCpi, ThawDelegatedAccountCpiAccounts,
 };
 
 declare_id!("51DFYj5Evdk3TnbipTmscxwt4HvJiYq5d3cfdriEEvqm");
@@ -33,7 +37,7 @@ pub mod nft_prediction_stake_v1 {
         let pool = &mut ctx.accounts.match_pool;
         pool.match_id = match_id;
         pool.admin = ctx.accounts.admin.key();
-        pool.prize_pool = 0; // funded later
+        pool.prize_pool = 0;
         pool.total_yes_weight = 0;
         pool.total_no_weight = 0;
         pool.resolved = false;
@@ -43,7 +47,7 @@ pub mod nft_prediction_stake_v1 {
         Ok(())
     }
 
-    // 3) Fund a match prize pool with tGATE (admin transfers into treasury ATA)
+    // 3) Fund a match prize pool with tGATE
     pub fn fund_match_pool(ctx: Context<FundMatchPool>, amount: u64) -> Result<()> {
         let pool = &mut ctx.accounts.match_pool;
         let treasury = &ctx.accounts.treasury;
@@ -53,7 +57,6 @@ pub mod nft_prediction_stake_v1 {
         require!(treasury.admin == ctx.accounts.admin.key(), ErrorCode::NotTreasuryAdmin);
         require!(amount > 0, ErrorCode::InvalidAmount);
 
-        // move tGATE from admin ATA -> treasury ATA
         token::transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -73,41 +76,55 @@ pub mod nft_prediction_stake_v1 {
         Ok(())
     }
 
-    // 4) Stake NFT into escrow and record prediction
+    // 4) Stake NFT: Approve delegate + Freeze (non-custodial lock)
     pub fn stake_nft(
         ctx: Context<StakeNft>,
         tier: Tier,
-        estimated_sol_value: u64, // lamports
+        estimated_sol_value: u64,
         prediction: bool,
     ) -> Result<()> {
-        let pool = &mut ctx.accounts.match_pool;
-        require!(!pool.resolved, ErrorCode::MatchResolved);
-
-        // user cap per match
-        let pos = &mut ctx.accounts.user_position;
-        if pos.nft_count == 0 {
-            pos.user = ctx.accounts.user.key();
-            pos.match_id = pool.match_id;
-            pos.bump = ctx.bumps.user_position;
-        }
-        require!(
-            pos.nft_count < pool.max_nfts_per_user,
-            ErrorCode::MaxNftsExceeded
-        );
-
-        // cheap NFT checks (v1)
+        // Validation first
+        require!(!ctx.accounts.match_pool.resolved, ErrorCode::MatchResolved);
         require!(ctx.accounts.nft_mint.decimals == 0, ErrorCode::InvalidNftMint);
         require!(ctx.accounts.nft_mint.supply == 1, ErrorCode::InvalidNftMint);
         require!(ctx.accounts.user_nft_ata.amount == 1, ErrorCode::InvalidNftAccount);
 
+        // Cache all values we need before any mutable borrows
+        let match_id = ctx.accounts.match_pool.match_id;
+        let max_nfts = ctx.accounts.match_pool.max_nfts_per_user;
+        let user_key = ctx.accounts.user.key();
+        let nft_mint_key = ctx.accounts.nft_mint.key();
+        let token_account_key = ctx.accounts.user_nft_ata.key();
+        let stake_bump = ctx.bumps.stake_record;
+        let user_position_bump = ctx.bumps.user_position;
+
         let band = resolve_value_band(estimated_sol_value);
         let weight = calculate_weight(tier, band);
 
-        // init stake record (PDA derived from match + nft mint)
+        // Create AccountInfo bindings BEFORE the mutable borrows
+        let token_metadata_program_info = ctx.accounts.token_metadata_program.to_account_info();
+        let stake_record_info = ctx.accounts.stake_record.to_account_info();
+        let user_nft_ata_info = ctx.accounts.user_nft_ata.to_account_info();
+        let nft_edition_info = ctx.accounts.nft_edition.to_account_info();
+        let nft_mint_info = ctx.accounts.nft_mint.to_account_info();
+        let token_program_info = ctx.accounts.token_program.to_account_info();
+        let user_info = ctx.accounts.user.to_account_info();
+
+        // User cap per match
+        let pos = &mut ctx.accounts.user_position;
+        if pos.nft_count == 0 {
+            pos.user = user_key;
+            pos.match_id = match_id;
+            pos.bump = user_position_bump;
+        }
+        require!(pos.nft_count < max_nfts, ErrorCode::MaxNftsExceeded);
+
+        // Init stake record PDA
         let stake = &mut ctx.accounts.stake_record;
-        stake.user = ctx.accounts.user.key();
-        stake.match_id = pool.match_id;
-        stake.nft_mint = ctx.accounts.nft_mint.key();
+        stake.user = user_key;
+        stake.match_id = match_id;
+        stake.nft_mint = nft_mint_key;
+        stake.token_account = token_account_key;
         stake.tier = tier;
         stake.estimated_sol_value = estimated_sol_value;
         stake.value_band = band;
@@ -115,9 +132,10 @@ pub mod nft_prediction_stake_v1 {
         stake.weight = weight;
         stake.claimed = false;
         stake.locked = true;
-        stake.bump = ctx.bumps.stake_record;
+        stake.bump = stake_bump;
 
-        // update pool totals
+        // Update pool totals
+        let pool = &mut ctx.accounts.match_pool;
         if prediction {
             pool.total_yes_weight = pool
                 .total_yes_weight
@@ -130,24 +148,50 @@ pub mod nft_prediction_stake_v1 {
                 .ok_or(ErrorCode::MathOverflow)?;
         }
 
-        // transfer NFT into escrow ATA owned by stake_record PDA
-        token::transfer(
+        // Step 1: Approve stake_record PDA as delegate for 1 token
+        token::approve(
             CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                Transfer {
-                    from: ctx.accounts.user_nft_ata.to_account_info(),
-                    to: ctx.accounts.escrow_nft_ata.to_account_info(),
-                    authority: ctx.accounts.user.to_account_info(),
+                token_program_info.clone(),
+                Approve {
+                    to: user_nft_ata_info.clone(),
+                    delegate: stake_record_info.clone(),
+                    authority: user_info,
                 },
             ),
             1,
         )?;
 
-        pos.nft_count = pos.nft_count.checked_add(1).ok_or(ErrorCode::MathOverflow)?;
+        // Step 2: Freeze the token account via Metaplex Token Metadata
+        let match_id_bytes = match_id.to_le_bytes();
+        let stake_seeds: &[&[u8]] = &[
+            b"stake",
+            match_id_bytes.as_ref(),
+            nft_mint_key.as_ref(),
+            &[stake_bump],
+        ];
+
+        let freeze_cpi = FreezeDelegatedAccountCpi::new(
+            &token_metadata_program_info,
+            FreezeDelegatedAccountCpiAccounts {
+                delegate: &stake_record_info,
+                token_account: &user_nft_ata_info,
+                edition: &nft_edition_info,
+                mint: &nft_mint_info,
+                token_program: &token_program_info,
+            },
+        );
+        freeze_cpi.invoke_signed(&[stake_seeds])?;
+
+        // Increment user position count
+        ctx.accounts.user_position.nft_count = ctx.accounts.user_position.nft_count
+            .checked_add(1)
+            .ok_or(ErrorCode::MathOverflow)?;
+        
+        msg!("NFT staked and frozen in user's wallet. Mint: {}", nft_mint_key);
         Ok(())
     }
 
-    // 5) Resolve match (admin)
+    // 5) Resolve match (admin only)
     pub fn resolve_match(ctx: Context<ResolveMatch>, outcome: bool) -> Result<()> {
         let pool = &mut ctx.accounts.match_pool;
         require!(!pool.resolved, ErrorCode::MatchResolved);
@@ -155,116 +199,177 @@ pub mod nft_prediction_stake_v1 {
 
         pool.outcome = outcome;
         pool.resolved = true;
+        
+        msg!("Match {} resolved. Outcome: {}", pool.match_id, outcome);
         Ok(())
     }
 
-    // 6) Winners claim reward (tGATE) + auto-return NFT
+    // 6) Admin unlocks loser's NFT (called per loser, can batch multiple in one tx)
+    // This thaws the NFT so losers can use their NFT again (but get no reward)
+    pub fn unlock_loser(ctx: Context<UnlockLoser>) -> Result<()> {
+        // Validation
+        require!(ctx.accounts.match_pool.resolved, ErrorCode::MatchNotResolved);
+        require!(ctx.accounts.stake_record.locked, ErrorCode::NotLocked);
+        require!(
+            ctx.accounts.stake_record.prediction != ctx.accounts.match_pool.outcome,
+            ErrorCode::WinnersMustClaim
+        );
+        require!(
+            ctx.accounts.match_pool.admin == ctx.accounts.admin.key(),
+            ErrorCode::NotMatchAdmin
+        );
+
+        // Cache values needed for seeds and logging
+        let match_id = ctx.accounts.stake_record.match_id;
+        let nft_mint_key = ctx.accounts.stake_record.nft_mint;
+        let stake_bump = ctx.accounts.stake_record.bump;
+        let user_key = ctx.accounts.stake_record.user;
+
+        // Create AccountInfo bindings
+        let token_metadata_program_info = ctx.accounts.token_metadata_program.to_account_info();
+        let stake_record_info = ctx.accounts.stake_record.to_account_info();
+        let user_nft_ata_info = ctx.accounts.user_nft_ata.to_account_info();
+        let nft_edition_info = ctx.accounts.nft_edition.to_account_info();
+        let nft_mint_info = ctx.accounts.nft_mint.to_account_info();
+        let token_program_info = ctx.accounts.token_program.to_account_info();
+
+        // Build seeds for signing
+        let match_id_bytes = match_id.to_le_bytes();
+        let stake_seeds: &[&[u8]] = &[
+            b"stake",
+            match_id_bytes.as_ref(),
+            nft_mint_key.as_ref(),
+            &[stake_bump],
+        ];
+
+        // Thaw the NFT via Metaplex Token Metadata
+        let thaw_cpi = ThawDelegatedAccountCpi::new(
+            &token_metadata_program_info,
+            ThawDelegatedAccountCpiAccounts {
+                delegate: &stake_record_info,
+                token_account: &user_nft_ata_info,
+                edition: &nft_edition_info,
+                mint: &nft_mint_info,
+                token_program: &token_program_info,
+            },
+        );
+        thaw_cpi.invoke_signed(&[stake_seeds])?;
+
+        // NOTE: We don't revoke delegation here because only the token account owner can revoke,
+        // and the admin is signing this tx (not the user). The delegation remains but is harmless
+        // since we mark locked=false and won't use it again.
+
+        // Update state
+        ctx.accounts.stake_record.locked = false;
+
+        msg!("Loser NFT unlocked. User: {}, Mint: {}", user_key, nft_mint_key);
+        Ok(())
+    }
+
+    // 7) Winner claims reward + auto-unlock NFT
     pub fn claim_reward(ctx: Context<ClaimReward>) -> Result<()> {
-        let pool = &ctx.accounts.match_pool;
-        let stake = &ctx.accounts.stake_record;
+        // Validation
+        require!(ctx.accounts.match_pool.resolved, ErrorCode::MatchNotResolved);
+        require!(ctx.accounts.stake_record.locked, ErrorCode::NotLocked);
+        require!(!ctx.accounts.stake_record.claimed, ErrorCode::AlreadyClaimed);
+        require!(
+            ctx.accounts.stake_record.prediction == ctx.accounts.match_pool.outcome,
+            ErrorCode::NotWinner
+        );
+        require!(ctx.accounts.match_pool.prize_pool > 0, ErrorCode::EmptyPrizePool);
 
-        require!(pool.resolved, ErrorCode::MatchNotResolved);
-        require!(stake.locked, ErrorCode::NotLocked);
-        require!(!stake.claimed, ErrorCode::AlreadyClaimed);
-        require!(stake.prediction == pool.outcome, ErrorCode::NotWinner);
-        require!(pool.prize_pool > 0, ErrorCode::EmptyPrizePool);
-
-        let winning_weight = if pool.outcome {
-            pool.total_yes_weight
+        let winning_weight = if ctx.accounts.match_pool.outcome {
+            ctx.accounts.match_pool.total_yes_weight
         } else {
-            pool.total_no_weight
+            ctx.accounts.match_pool.total_no_weight
         };
         require!(winning_weight > 0, ErrorCode::NoWinners);
 
-        // reward = stake.weight / winning_weight * prize_pool
-        let reward_u128 = (stake.weight as u128)
-            .checked_mul(pool.prize_pool as u128)
+        // Calculate reward: stake.weight / winning_weight * prize_pool
+        let stake_weight = ctx.accounts.stake_record.weight;
+        let prize_pool = ctx.accounts.match_pool.prize_pool;
+        let reward_u128 = (stake_weight as u128)
+            .checked_mul(prize_pool as u128)
             .ok_or(ErrorCode::MathOverflow)?
             / winning_weight;
-
         let reward: u64 = reward_u128.try_into().map_err(|_| ErrorCode::MathOverflow)?;
 
-        // Cache values needed for seeds before mutable operations
-        let match_id_bytes = stake.match_id.to_le_bytes();
-        let nft_mint_key = stake.nft_mint;
-        let stake_bump = stake.bump;
+        // Cache values for seeds and logging
+        let match_id = ctx.accounts.stake_record.match_id;
+        let nft_mint_key = ctx.accounts.stake_record.nft_mint;
+        let stake_bump = ctx.accounts.stake_record.bump;
+        let user_key = ctx.accounts.stake_record.user;
+        let treasury_bump = ctx.accounts.treasury.bump;
 
-        // transfer tGATE from treasury -> user, signed by treasury PDA
-        let treasury_seeds: &[&[u8]] = &[b"treasury", &[ctx.accounts.treasury.bump]];
+        // Create AccountInfo bindings
+        let token_metadata_program_info = ctx.accounts.token_metadata_program.to_account_info();
+        let stake_record_info = ctx.accounts.stake_record.to_account_info();
+        let user_nft_ata_info = ctx.accounts.user_nft_ata.to_account_info();
+        let nft_edition_info = ctx.accounts.nft_edition.to_account_info();
+        let nft_mint_info = ctx.accounts.nft_mint.to_account_info();
+        let token_program_info = ctx.accounts.token_program.to_account_info();
+        let treasury_gate_ata_info = ctx.accounts.treasury_gate_ata.to_account_info();
+        let user_gate_ata_info = ctx.accounts.user_gate_ata.to_account_info();
+        let treasury_info = ctx.accounts.treasury.to_account_info();
+        let user_info = ctx.accounts.user.to_account_info();
+
+        // Transfer tGATE reward from treasury to winner
+        let treasury_seeds: &[&[u8]] = &[b"treasury", &[treasury_bump]];
         token::transfer(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                token_program_info.clone(),
                 Transfer {
-                    from: ctx.accounts.treasury_gate_ata.to_account_info(),
-                    to: ctx.accounts.user_gate_ata.to_account_info(),
-                    authority: ctx.accounts.treasury.to_account_info(),
+                    from: treasury_gate_ata_info,
+                    to: user_gate_ata_info,
+                    authority: treasury_info,
                 },
                 &[treasury_seeds],
             ),
             reward,
         )?;
 
-        // return NFT from escrow -> user, signed by stake_record PDA
+        // Build seeds for signing
+        let match_id_bytes = match_id.to_le_bytes();
         let stake_seeds: &[&[u8]] = &[
             b"stake",
-            &match_id_bytes,
+            match_id_bytes.as_ref(),
             nft_mint_key.as_ref(),
             &[stake_bump],
         ];
-        token::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                Transfer {
-                    from: ctx.accounts.escrow_nft_ata.to_account_info(),
-                    to: ctx.accounts.user_nft_ata.to_account_info(),
-                    authority: ctx.accounts.stake_record.to_account_info(),
+
+        // Thaw the NFT
+        let thaw_cpi = ThawDelegatedAccountCpi::new(
+            &token_metadata_program_info,
+            ThawDelegatedAccountCpiAccounts {
+                delegate: &stake_record_info,
+                token_account: &user_nft_ata_info,
+                edition: &nft_edition_info,
+                mint: &nft_mint_info,
+                token_program: &token_program_info,
+            },
+        );
+        thaw_cpi.invoke_signed(&[stake_seeds])?;
+
+        // Revoke delegation - user (token account owner) is signing this tx
+        token::revoke(
+            CpiContext::new(
+                token_program_info,
+                Revoke {
+                    source: user_nft_ata_info,
+                    authority: user_info, // User is the owner of the token account
                 },
-                &[stake_seeds],
             ),
-            1,
         )?;
 
         // Update state
         ctx.accounts.stake_record.claimed = true;
         ctx.accounts.stake_record.locked = false;
-        Ok(())
-    }
 
-    // 7) Losers can withdraw NFT after match resolved (no reward)
-    pub fn unstake_loser(ctx: Context<UnstakeLoser>) -> Result<()> {
-        let pool = &ctx.accounts.match_pool;
-        let stake = &ctx.accounts.stake_record;
-
-        require!(pool.resolved, ErrorCode::MatchNotResolved);
-        require!(stake.locked, ErrorCode::NotLocked);
-        require!(stake.prediction != pool.outcome, ErrorCode::WinnersMustClaim);
-
-        // Cache values needed for seeds
-        let match_id_bytes = stake.match_id.to_le_bytes();
-        let nft_mint_key = stake.nft_mint;
-        let stake_bump = stake.bump;
-
-        let stake_seeds: &[&[u8]] = &[
-            b"stake",
-            &match_id_bytes,
-            nft_mint_key.as_ref(),
-            &[stake_bump],
-        ];
-
-        token::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                Transfer {
-                    from: ctx.accounts.escrow_nft_ata.to_account_info(),
-                    to: ctx.accounts.user_nft_ata.to_account_info(),
-                    authority: ctx.accounts.stake_record.to_account_info(),
-                },
-                &[stake_seeds],
-            ),
-            1,
-        )?;
-
-        ctx.accounts.stake_record.locked = false;
+        msg!(
+            "Winner claimed reward! User: {}, Reward: {} tGATE, NFT unlocked",
+            user_key,
+            reward
+        );
         Ok(())
     }
 }
@@ -394,16 +499,27 @@ pub struct StakeNft<'info> {
 
     pub nft_mint: Account<'info, Mint>,
 
-    #[account(mut, constraint = user_nft_ata.mint == nft_mint.key())]
+    /// The user's NFT token account (stays with user, will be frozen)
+    #[account(
+        mut,
+        constraint = user_nft_ata.mint == nft_mint.key(),
+        constraint = user_nft_ata.owner == user.key() @ ErrorCode::InvalidNftAccount
+    )]
     pub user_nft_ata: Account<'info, TokenAccount>,
 
+    /// NFT Master Edition PDA (required for freeze/thaw)
+    /// CHECK: Validated by Metaplex Token Metadata program
     #[account(
-        init_if_needed,
-        payer = user,
-        associated_token::mint = nft_mint,
-        associated_token::authority = stake_record
+        seeds = [
+            b"metadata",
+            mpl_token_metadata::ID.as_ref(),
+            nft_mint.key().as_ref(),
+            b"edition"
+        ],
+        seeds::program = mpl_token_metadata::ID,
+        bump
     )]
-    pub escrow_nft_ata: Account<'info, TokenAccount>,
+    pub nft_edition: UncheckedAccount<'info>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -411,6 +527,10 @@ pub struct StakeNft<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
+    
+    /// CHECK: Metaplex Token Metadata program
+    #[account(address = mpl_token_metadata::ID)]
+    pub token_metadata_program: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -419,6 +539,53 @@ pub struct ResolveMatch<'info> {
     pub match_pool: Account<'info, MatchPool>,
     #[account(mut)]
     pub admin: Signer<'info>,
+}
+
+/// Admin unlocks loser's NFT after match resolution
+#[derive(Accounts)]
+pub struct UnlockLoser<'info> {
+    pub match_pool: Account<'info, MatchPool>,
+
+    #[account(
+        mut,
+        seeds = [b"stake", match_pool.match_id.to_le_bytes().as_ref(), nft_mint.key().as_ref()],
+        bump = stake_record.bump,
+    )]
+    pub stake_record: Account<'info, StakeRecord>,
+
+    pub nft_mint: Account<'info, Mint>,
+
+    /// The loser's NFT token account
+    #[account(
+        mut,
+        constraint = user_nft_ata.mint == nft_mint.key(),
+        constraint = user_nft_ata.key() == stake_record.token_account @ ErrorCode::InvalidNftAccount
+    )]
+    pub user_nft_ata: Account<'info, TokenAccount>,
+
+    /// NFT Master Edition PDA
+    /// CHECK: Validated by Metaplex Token Metadata program
+    #[account(
+        seeds = [
+            b"metadata",
+            mpl_token_metadata::ID.as_ref(),
+            nft_mint.key().as_ref(),
+            b"edition"
+        ],
+        seeds::program = mpl_token_metadata::ID,
+        bump
+    )]
+    pub nft_edition: UncheckedAccount<'info>,
+
+    /// Admin who resolved the match
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+
+    /// CHECK: Metaplex Token Metadata program
+    #[account(address = mpl_token_metadata::ID)]
+    pub token_metadata_program: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -435,11 +602,27 @@ pub struct ClaimReward<'info> {
 
     pub nft_mint: Account<'info, Mint>,
 
-    #[account(mut, constraint = user_nft_ata.mint == nft_mint.key())]
+    /// Winner's NFT token account
+    #[account(
+        mut,
+        constraint = user_nft_ata.mint == nft_mint.key(),
+        constraint = user_nft_ata.key() == stake_record.token_account @ ErrorCode::InvalidNftAccount
+    )]
     pub user_nft_ata: Account<'info, TokenAccount>,
 
-    #[account(mut, associated_token::mint = nft_mint, associated_token::authority = stake_record)]
-    pub escrow_nft_ata: Account<'info, TokenAccount>,
+    /// NFT Master Edition PDA
+    /// CHECK: Validated by Metaplex Token Metadata program
+    #[account(
+        seeds = [
+            b"metadata",
+            mpl_token_metadata::ID.as_ref(),
+            nft_mint.key().as_ref(),
+            b"edition"
+        ],
+        seeds::program = mpl_token_metadata::ID,
+        bump
+    )]
+    pub nft_edition: UncheckedAccount<'info>,
 
     #[account(seeds = [b"treasury"], bump = treasury.bump)]
     pub treasury: Account<'info, Treasury>,
@@ -456,32 +639,10 @@ pub struct ClaimReward<'info> {
     pub user: Signer<'info>,
 
     pub token_program: Program<'info, Token>,
-}
 
-#[derive(Accounts)]
-pub struct UnstakeLoser<'info> {
-    pub match_pool: Account<'info, MatchPool>,
-
-    #[account(
-        mut,
-        seeds = [b"stake", match_pool.match_id.to_le_bytes().as_ref(), nft_mint.key().as_ref()],
-        bump = stake_record.bump,
-        constraint = stake_record.user == user.key()
-    )]
-    pub stake_record: Account<'info, StakeRecord>,
-
-    pub nft_mint: Account<'info, Mint>,
-
-    #[account(mut, constraint = user_nft_ata.mint == nft_mint.key())]
-    pub user_nft_ata: Account<'info, TokenAccount>,
-
-    #[account(mut, associated_token::mint = nft_mint, associated_token::authority = stake_record)]
-    pub escrow_nft_ata: Account<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    pub token_program: Program<'info, Token>,
+    /// CHECK: Metaplex Token Metadata program
+    #[account(address = mpl_token_metadata::ID)]
+    pub token_metadata_program: UncheckedAccount<'info>,
 }
 
 // ----------------------------
@@ -529,6 +690,7 @@ pub struct StakeRecord {
     pub user: Pubkey,
     pub match_id: u64,
     pub nft_mint: Pubkey,
+    pub token_account: Pubkey, // User's ATA where NFT is frozen
     pub tier: Tier,
     pub estimated_sol_value: u64,
     pub value_band: ValueBand,
@@ -539,7 +701,8 @@ pub struct StakeRecord {
     pub bump: u8,
 }
 impl StakeRecord {
-    pub const SIZE: usize = 32 + 8 + 32 + 1 + 8 + 1 + 1 + 16 + 1 + 1 + 1;
+    // Added token_account (32 bytes)
+    pub const SIZE: usize = 32 + 8 + 32 + 32 + 1 + 8 + 1 + 1 + 16 + 1 + 1 + 1;
 }
 
 // ----------------------------
@@ -578,7 +741,7 @@ pub enum ErrorCode {
     MaxNftsExceeded,
     #[msg("Invalid NFT mint (must be supply=1, decimals=0)")]
     InvalidNftMint,
-    #[msg("Invalid NFT token account (must hold exactly 1)")]
+    #[msg("Invalid NFT token account")]
     InvalidNftAccount,
     #[msg("Prize pool is empty")]
     EmptyPrizePool,
@@ -590,7 +753,7 @@ pub enum ErrorCode {
     AlreadyClaimed,
     #[msg("Not a winner")]
     NotWinner,
-    #[msg("Winners must claim (claim returns NFT)")]
+    #[msg("Winners must claim rewards (losers should use unlock_loser)")]
     WinnersMustClaim,
     #[msg("Invalid max per user")]
     InvalidMaxPerUser,

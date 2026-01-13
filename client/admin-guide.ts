@@ -6,6 +6,7 @@
  * 2. Create prediction match pools
  * 3. Fund match pools with tGATE prizes
  * 4. Resolve matches
+ * 5. Unlock losers' NFTs (non-custodial freeze/thaw model)
  */
 
 import * as anchor from "@coral-xyz/anchor";
@@ -22,6 +23,13 @@ import * as os from "os";
 
 // Import the IDL
 import idl from "../target/idl/nft_prediction_stake_v1.json";
+
+// ===========================================
+// CONSTANTS
+// ===========================================
+
+// Metaplex Token Metadata Program ID
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
 // ===========================================
 // QUERY FUNCTIONS - Check who is admin
@@ -86,9 +94,9 @@ async function checkAllAdmins(matchId: number) {
   console.log("You are Match Admin:", matchAdmin === admin.publicKey.toBase58() ? "✅ YES" : "❌ NO");
   
   if (treasuryAdmin === admin.publicKey.toBase58() && matchAdmin === admin.publicKey.toBase58()) {
-    console.log("\n✅ You CAN fund this match!");
+    console.log("\n You CAN fund this match!");
   } else {
-    console.log("\n❌ You CANNOT fund this match.");
+    console.log("\n You CANNOT fund this match.");
     if (treasuryAdmin !== admin.publicKey.toBase58()) {
       console.log("   - You are not the treasury admin");
     }
@@ -144,6 +152,22 @@ function getProgram(provider: AnchorProvider): Program {
   return new Program(idl as any, provider);
 }
 
+/**
+ * Derive NFT Edition PDA (Master Edition for Candy Machine NFTs)
+ */
+function getNftEditionPda(nftMint: PublicKey): PublicKey {
+  const [editionPda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("metadata"),
+      TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+      nftMint.toBuffer(),
+      Buffer.from("edition"),
+    ],
+    TOKEN_METADATA_PROGRAM_ID
+  );
+  return editionPda;
+}
+
 // ===========================================
 // SETUP
 // ===========================================
@@ -169,17 +193,17 @@ async function main() {
   
   if (treasuryInfo) {
     const treasury = await (program.account as any).treasury.fetch(treasuryPda);
-    console.log("\n⚠️  Treasury already exists!");
+    console.log("\n  Treasury already exists!");
     console.log("   Admin:", treasury.admin.toBase58());
     console.log("   Gate Mint:", treasury.gateMint.toBase58());
     
     if (!treasury.gateMint.equals(TGATE_MINT)) {
-      console.log("\n❌ Treasury was initialized with a DIFFERENT token!");
+      console.log("\n Treasury was initialized with a DIFFERENT token!");
       console.log("   To use your real tGATE, you need to deploy a new program.");
       return;
     }
   } else {
-    console.log("\n✅ Treasury not initialized yet. You can initialize it!");
+    console.log("\n Treasury not initialized yet. You can initialize it!");
   }
 }
 
@@ -221,7 +245,7 @@ async function initializeTreasury() {
     })
     .rpc();
 
-  console.log("✅ Treasury initialized!");
+  console.log(" Treasury initialized!");
   console.log("   Transaction:", tx);
   console.log("   Treasury PDA:", treasuryPda.toBase58());
   console.log("   Treasury tGATE ATA:", treasuryGateAta.toBase58());
@@ -253,7 +277,7 @@ async function createMatchPool(matchId: number, maxNftsPerUser: number = 3) {
     })
     .rpc();
 
-  console.log("✅ Match pool created!");
+  console.log(" Match pool created!");
   console.log("   Match ID:", matchId);
   console.log("   Match Pool PDA:", matchPoolPda.toBase58());
   console.log("   Max NFTs per user:", maxNftsPerUser);
@@ -342,6 +366,195 @@ async function resolveMatch(matchId: number, outcome: boolean) {
 }
 
 /**
+ * Step 5: Unlock a Loser's NFT (Admin only)
+ * 
+ * After resolving a match, call this to thaw (unlock) each losing user's NFT.
+ * The NFT was frozen in the user's wallet - this unlocks it so they can use it again.
+ * 
+ * NOTE: This uses the new non-custodial freeze/thaw model.
+ * The NFT never leaves the user's wallet, it's just frozen while staked.
+ * 
+ * @param matchId - The match ID
+ * @param nftMint - The NFT mint that was staked by the loser
+ * @param userNftAta - The loser's token account holding the NFT
+ */
+async function unlockLoser(matchId: number, nftMint: PublicKey, userNftAta: PublicKey) {
+  const { provider, admin } = getProvider();
+  const program = getProgram(provider);
+
+  const matchIdBN = new BN(matchId);
+
+  // Derive PDAs
+  const [matchPoolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
+    PROGRAM_ID
+  );
+
+  const [stakeRecordPda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("stake"),
+      matchIdBN.toArrayLike(Buffer, "le", 8),
+      nftMint.toBuffer(),
+    ],
+    PROGRAM_ID
+  );
+
+  const nftEdition = getNftEditionPda(nftMint);
+
+  console.log(`\n=== Unlocking Loser's NFT on Match #${matchId} ===`);
+  console.log("   NFT Mint:", nftMint.toBase58());
+  console.log("   User NFT ATA:", userNftAta.toBase58());
+  console.log("   NFT Edition:", nftEdition.toBase58());
+
+  const tx = await program.methods
+    .unlockLoser()
+    .accountsStrict({
+      matchPool: matchPoolPda,
+      stakeRecord: stakeRecordPda,
+      nftMint: nftMint,
+      userNftAta: userNftAta,
+      nftEdition: nftEdition,
+      admin: admin.publicKey,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+    })
+    .rpc();
+
+  console.log(" Loser's NFT Unlocked!");
+  console.log("   Transaction:", tx);
+  console.log("   The user's NFT is now thawed and can be transferred again.");
+}
+
+/**
+ * Batch unlock multiple losers' NFTs
+ * 
+ * @param matchId - The match ID
+ * @param losers - Array of { nftMint, userNftAta } for each loser
+ */
+async function batchUnlockLosers(
+  matchId: number, 
+  losers: { nftMint: PublicKey; userNftAta: PublicKey }[]
+) {
+  console.log(`\n=== Batch Unlocking ${losers.length} Losers' NFTs ===`);
+  
+  for (let i = 0; i < losers.length; i++) {
+    console.log(`\nUnlocking ${i + 1}/${losers.length}...`);
+    await unlockLoser(matchId, losers[i].nftMint, losers[i].userNftAta);
+  }
+  
+  console.log(`\n✅ All ${losers.length} losers' NFTs have been unlocked!`);
+}
+
+/**
+ * Get all stake records for a match (to find losers to unlock)
+ * 
+ * NOTE: This handles both old (transfer model) and new (freeze/thaw model) stake records.
+ * Old records don't have tokenAccount field and will be skipped for auto-unlock.
+ */
+async function getMatchStakeRecords(matchId: number) {
+  const { provider } = getProvider();
+  const program = getProgram(provider);
+
+  const matchIdBN = new BN(matchId);
+  
+  const [matchPoolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
+    PROGRAM_ID
+  );
+
+  try {
+    // Get match pool to know the outcome
+    const matchPool = await (program.account as any).matchPool.fetch(matchPoolPda);
+    
+    console.log(`\n=== Match #${matchId} Stake Records ===`);
+    console.log("   Resolved:", matchPool.resolved);
+    console.log("   Outcome:", matchPool.outcome ? "YES" : "NO");
+
+    // Get all stake record accounts (raw, unfiltered)
+    // Use getProgramAccounts to get raw account data
+    const STAKE_RECORD_SIZE = 8 + 32 + 8 + 32 + 32 + 1 + 8 + 1 + 1 + 16 + 1 + 1 + 1; // New size with tokenAccount
+    const OLD_STAKE_RECORD_SIZE = 8 + 32 + 8 + 32 + 1 + 8 + 1 + 1 + 16 + 1 + 1 + 1; // Old size without tokenAccount
+
+    const allAccounts = await provider.connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        // Filter by discriminator for StakeRecord (first 8 bytes)
+        // We'll decode manually to handle both old and new formats
+      ],
+    });
+
+    const winners: any[] = [];
+    const losers: any[] = [];
+    let oldFormatCount = 0;
+    let newFormatCount = 0;
+
+    for (const { pubkey, account } of allAccounts) {
+      try {
+        // Try to decode as new format first
+        const stake = await (program.account as any).stakeRecord.fetch(pubkey);
+        
+        // Check if this stake belongs to the current match
+        if (!stake.matchId.eq(matchIdBN)) continue;
+
+        newFormatCount++;
+        const isWinner = stake.prediction === matchPool.outcome;
+        const stakeInfo = {
+          pubkey: pubkey.toBase58(),
+          user: stake.user.toBase58(),
+          nftMint: stake.nftMint.toBase58(),
+          tokenAccount: stake.tokenAccount?.toBase58() || null,
+          prediction: stake.prediction ? "YES" : "NO",
+          locked: stake.locked,
+          claimed: stake.claimed,
+          isNewFormat: true,
+        };
+
+        if (isWinner) {
+          winners.push(stakeInfo);
+        } else {
+          losers.push(stakeInfo);
+        }
+      } catch (decodeError) {
+        // This might be an old format stake record or different account type
+        // Skip it - old format stakes can't be unlocked with the new program anyway
+        oldFormatCount++;
+      }
+    }
+
+    console.log(`\n   Found ${newFormatCount} new-format stakes, ${oldFormatCount} incompatible/other accounts`);
+
+    console.log(`\n   Winners (${winners.length}):`);
+    winners.forEach((w, i) => {
+      console.log(`   ${i + 1}. ${w.user} - NFT: ${w.nftMint} - Locked: ${w.locked}`);
+    });
+
+    console.log(`\n   Losers (${losers.length}):`);
+    losers.forEach((l, i) => {
+      console.log(`   ${i + 1}. ${l.user} - NFT: ${l.nftMint} - Locked: ${l.locked}`);
+    });
+
+    // Return losers that still need unlocking (only new format with tokenAccount)
+    const losersToUnlock = losers
+      .filter((l) => l.locked && l.tokenAccount !== null)
+      .map((l) => ({
+        nftMint: new PublicKey(l.nftMint),
+        userNftAta: new PublicKey(l.tokenAccount),
+      }));
+
+    console.log(`\n   Losers needing unlock: ${losersToUnlock.length}`);
+    
+    if (losers.length > 0 && losersToUnlock.length === 0) {
+      console.log("   Note: Some losers may have old-format stakes (created before program update).");
+      console.log("   Old-format stakes used transfer model and don't need unlock_loser.");
+    }
+
+    return losersToUnlock;
+  } catch (e) {
+    console.log(`Match #${matchId} not found or error:`, e);
+    return [];
+  }
+}
+
+/**
  * View match pool status
  */
 async function viewMatchPool(matchId: number) {
@@ -372,6 +585,31 @@ async function viewMatchPool(matchId: number) {
   }
 }
 
+/**
+ * Full workflow after match ends:
+ * 1. Resolve the match
+ * 2. Unlock all losers' NFTs
+ */
+async function resolveAndUnlockLosers(matchId: number, outcome: boolean) {
+  console.log(`\n=== Full Match Resolution Workflow for Match #${matchId} ===`);
+  
+  // Step 1: Resolve the match
+  await resolveMatch(matchId, outcome);
+  
+  // Step 2: Get all losers that need unlocking
+  const losersToUnlock = await getMatchStakeRecords(matchId);
+  
+  // Step 3: Unlock all losers
+  if (losersToUnlock.length > 0) {
+    await batchUnlockLosers(matchId, losersToUnlock);
+  } else {
+    console.log("\n   No losers need unlocking.");
+  }
+  
+  console.log(`\n Match #${matchId} fully resolved!`);
+  console.log("   Winners can now call claimReward() to get their NFT unlocked + tGATE rewards.");
+}
+
 // ===========================================
 // RUN
 // ===========================================
@@ -382,10 +620,21 @@ async function viewMatchPool(matchId: number) {
 // getTreasuryAdmin();           // Who is the treasury admin?
 // getMatchAdmin(1001);          // Who is the admin of match #1001?
 // checkAllAdmins(1001);          // Check your permissions for match #1001
+// getMatchStakeRecords(1001);   // View all stakes and find losers to unlock
 
 // === ACTION FUNCTIONS ===
 // initializeTreasury();         // Run this FIRST!
-// createMatchPool(470023, 2);     // Create match #1001, max 3 NFTs per user
-fundMatchPool(470023, 100);     // Fund match #1001 with 100 tGATE
-// resolveMatch(470019, true);     // Resolve match #1001: YES wins
-// viewMatchPool(470019);          // View match #1001 details
+// createMatchPool(11111, 3);     // Create match #1001, max 3 NFTs per user
+// fundMatchPool(11111, 100);     // Fund match #1001 with 100 tGATE
+// resolveMatch(11111, true);     // Resolve match #1001: YES wins
+// viewMatchPool(470050);          // View match #1001 details
+
+// === NEW: Unlock Losers' NFTs ===
+// unlockLoser(
+//   470019,
+//   new PublicKey("LOSER_NFT_MINT_ADDRESS"),
+//   new PublicKey("LOSER_USER_NFT_ATA")
+// );
+
+// === FULL WORKFLOW: Resolve + Unlock all losers ===
+resolveAndUnlockLosers(11111, true);  // Resolve as YES wins + unlock all losers

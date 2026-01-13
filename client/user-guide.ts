@@ -1,10 +1,14 @@
 /**
  * CosmicGATE NFT Prediction Staking - User Guide
  * 
+ * NON-CUSTODIAL STAKING MODEL:
+ * Your NFT stays in YOUR wallet! It's "frozen" while staked (can't transfer/sell),
+ * but it never leaves your possession.
+ * 
  * This script shows how users can:
- * 1. Stake their NFT on a match prediction
- * 2. Claim rewards if they win
- * 3. Unstake if they lose
+ * 1. Stake their NFT on a match prediction (NFT gets frozen in your wallet)
+ * 2. Claim rewards if they win (NFT gets thawed + you get tGATE rewards)
+ * 3. Wait for admin to unlock if they lose (NFT gets thawed, no rewards)
  */
 
 import * as anchor from "@coral-xyz/anchor";
@@ -23,8 +27,11 @@ import * as os from "os";
 import idl from "../target/idl/nft_prediction_stake_v1.json";
 
 // ===========================================
-// CONFIGURATION
+// CONSTANTS
 // ===========================================
+
+// Metaplex Token Metadata Program ID
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
 // Program ID (deployed on devnet)
 const PROGRAM_ID = new PublicKey("51DFYj5Evdk3TnbipTmscxwt4HvJiYq5d3cfdriEEvqm");
@@ -60,12 +67,34 @@ function getProgram(provider: AnchorProvider): Program {
   return new Program(idl as any, provider);
 }
 
+/**
+ * Derive NFT Edition PDA (Master Edition for Candy Machine NFTs)
+ */
+function getNftEditionPda(nftMint: PublicKey): PublicKey {
+  const [editionPda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("metadata"),
+      TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+      nftMint.toBuffer(),
+      Buffer.from("edition"),
+    ],
+    TOKEN_METADATA_PROGRAM_ID
+  );
+  return editionPda;
+}
+
 // ===========================================
 // USER FUNCTIONS
 // ===========================================
 
 /**
  * Stake an NFT on a match prediction
+ * 
+ * HOW IT WORKS (Non-Custodial):
+ * 1. Your program becomes the "delegate" for your NFT
+ * 2. Your NFT gets "frozen" via Metaplex Token Metadata
+ * 3. The NFT STAYS in your wallet - you still own it!
+ * 4. You just can't transfer/sell it while staked
  * 
  * @param matchId - The match ID to bet on
  * @param nftMint - Your NFT's mint address
@@ -111,13 +140,15 @@ async function stakeNft(
   );
 
   const userNftAta = getAssociatedTokenAddressSync(nftMint, user.publicKey);
-  const escrowNftAta = getAssociatedTokenAddressSync(nftMint, stakeRecordPda, true);
+  const nftEdition = getNftEditionPda(nftMint);
 
   console.log(`\n=== Staking NFT on Match #${matchId} ===`);
   console.log("   NFT Mint:", nftMint.toBase58());
   console.log("   Tier:", tier);
   console.log("   Estimated Value:", estimatedSolValue, "SOL");
   console.log("   Prediction:", prediction ? "YES" : "NO");
+  console.log("   NFT Edition (for freeze):", nftEdition.toBase58());
+  console.log("\n   📌 Your NFT will be FROZEN in your wallet (you still own it!)");
 
   // Build the tier enum object based on tier string
   let tierArg: any;
@@ -136,22 +167,29 @@ async function stakeNft(
       userPosition: userPositionPda,
       nftMint: nftMint,
       userNftAta: userNftAta,
-      escrowNftAta: escrowNftAta,
+      nftEdition: nftEdition,
       user: user.publicKey,
       systemProgram: SystemProgram.programId,
       tokenProgram: TOKEN_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
     })
     .rpc();
 
   console.log("✅ NFT Staked!");
   console.log("   Transaction:", tx);
   console.log("   Stake Record PDA:", stakeRecordPda.toBase58());
+  console.log("\n   🔒 Your NFT is now FROZEN in your wallet.");
+  console.log("   🎮 Wait for the match result to claim rewards or get unlocked!");
 }
 
 /**
  * Claim rewards (if you won)
- * This returns your NFT AND gives you tGATE rewards
+ * This THAWS your NFT AND gives you tGATE rewards
+ * 
+ * Only winners can call this. After claiming:
+ * - Your NFT is unfrozen (can transfer/sell again)
+ * - You receive your tGATE reward based on your weight
  */
 async function claimReward(matchId: number, nftMint: PublicKey) {
   const { provider, user } = getProvider();
@@ -181,7 +219,7 @@ async function claimReward(matchId: number, nftMint: PublicKey) {
   );
 
   const userNftAta = getAssociatedTokenAddressSync(nftMint, user.publicKey);
-  const escrowNftAta = getAssociatedTokenAddressSync(nftMint, stakeRecordPda, true);
+  const nftEdition = getNftEditionPda(nftMint);
   const treasuryGateAta = getAssociatedTokenAddressSync(TGATE_MINT, treasuryPda, true);
   const userGateAta = getAssociatedTokenAddressSync(TGATE_MINT, user.publicKey);
 
@@ -194,6 +232,8 @@ async function claimReward(matchId: number, nftMint: PublicKey) {
   );
 
   console.log(`\n=== Claiming Reward for Match #${matchId} ===`);
+  console.log("   NFT Mint:", nftMint.toBase58());
+  console.log("   NFT Edition:", nftEdition.toBase58());
 
   const tx = await program.methods
     .claimReward()
@@ -202,68 +242,21 @@ async function claimReward(matchId: number, nftMint: PublicKey) {
       stakeRecord: stakeRecordPda,
       nftMint: nftMint,
       userNftAta: userNftAta,
-      escrowNftAta: escrowNftAta,
+      nftEdition: nftEdition,
       treasury: treasuryPda,
       gateMint: TGATE_MINT,
       treasuryGateAta: treasuryGateAta,
       userGateAta: userGateAta,
       user: user.publicKey,
       tokenProgram: TOKEN_PROGRAM_ID,
+      tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
     })
     .rpc();
 
   console.log("✅ Reward Claimed!");
   console.log("   Transaction:", tx);
-  console.log("   Your NFT has been returned to your wallet");
-  console.log("   Check your wallet for tGATE rewards!");
-}
-
-/**
- * Unstake NFT (if you lost)
- * You get your NFT back, but no rewards
- */
-async function unstakeLoser(matchId: number, nftMint: PublicKey) {
-  const { provider, user } = getProvider();
-  const program = getProgram(provider);
-
-  const matchIdBN = new BN(matchId);
-
-  // Derive PDAs
-  const [matchPoolPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
-    PROGRAM_ID
-  );
-
-  const [stakeRecordPda] = PublicKey.findProgramAddressSync(
-    [
-      Buffer.from("stake"),
-      matchIdBN.toArrayLike(Buffer, "le", 8),
-      nftMint.toBuffer(),
-    ],
-    PROGRAM_ID
-  );
-
-  const userNftAta = getAssociatedTokenAddressSync(nftMint, user.publicKey);
-  const escrowNftAta = getAssociatedTokenAddressSync(nftMint, stakeRecordPda, true);
-
-  console.log(`\n=== Unstaking NFT from Match #${matchId} ===`);
-
-  const tx = await program.methods
-    .unstakeLoser()
-    .accountsStrict({
-      matchPool: matchPoolPda,
-      stakeRecord: stakeRecordPda,
-      nftMint: nftMint,
-      userNftAta: userNftAta,
-      escrowNftAta: escrowNftAta,
-      user: user.publicKey,
-      tokenProgram: TOKEN_PROGRAM_ID,
-    })
-    .rpc();
-
-  console.log("✅ NFT Unstaked!");
-  console.log("   Transaction:", tx);
-  console.log("   Your NFT has been returned (no rewards for losing)");
+  console.log("\n   🔓 Your NFT is now UNFROZEN (you can transfer/sell it again)");
+  console.log("   💰 Check your wallet for tGATE rewards!");
 }
 
 /**
@@ -289,12 +282,112 @@ async function viewMyStake(matchId: number, nftMint: PublicKey) {
     
     console.log(`\n=== Your Stake on Match #${matchId} ===`);
     console.log("   NFT Mint:", stake.nftMint.toBase58());
+    console.log("   Token Account:", stake.tokenAccount.toBase58());
     console.log("   Prediction:", stake.prediction ? "YES" : "NO");
     console.log("   Weight:", stake.weight.toString());
-    console.log("   Locked:", stake.locked);
-    console.log("   Claimed:", stake.claimed);
+    console.log("   Locked:", stake.locked ? "🔒 YES (frozen)" : "🔓 NO (unfrozen)");
+    console.log("   Claimed:", stake.claimed ? "✅ YES" : "❌ NO");
+
+    if (stake.locked) {
+      console.log("\n   📌 Your NFT is currently FROZEN in your wallet.");
+      console.log("   🎮 Wait for match resolution, then:");
+      console.log("      - If you WIN: call claimReward() to get tGATE + unfreeze NFT");
+      console.log("      - If you LOSE: admin will unlock your NFT automatically");
+    }
   } catch (e) {
     console.log("Stake not found");
+  }
+}
+
+/**
+ * View match pool details
+ */
+async function viewMatchPool(matchId: number) {
+  const { provider } = getProvider();
+  const program = getProgram(provider);
+
+  const matchIdBN = new BN(matchId);
+  
+  const [matchPoolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
+    PROGRAM_ID
+  );
+
+  try {
+    const matchPool = await (program.account as any).matchPool.fetch(matchPoolPda);
+    
+    console.log(`\n=== Match Pool #${matchId} ===`);
+    console.log("   Prize Pool:", matchPool.prizePool.toNumber() / 1_000_000, "tGATE");
+    console.log("   Total YES Weight:", matchPool.totalYesWeight.toString());
+    console.log("   Total NO Weight:", matchPool.totalNoWeight.toString());
+    console.log("   Resolved:", matchPool.resolved ? "✅ YES" : "❌ NO");
+    
+    if (matchPool.resolved) {
+      console.log("   Outcome:", matchPool.outcome ? "🎉 YES WINS" : "🎉 NO WINS");
+    }
+    console.log("   Max NFTs per user:", matchPool.maxNftsPerUser);
+  } catch (e) {
+    console.log(`Match pool #${matchId} not found`);
+  }
+}
+
+/**
+ * Check if you're a winner or loser
+ */
+async function checkMyResult(matchId: number, nftMint: PublicKey) {
+  const { provider, user } = getProvider();
+  const program = getProgram(provider);
+
+  const matchIdBN = new BN(matchId);
+
+  const [matchPoolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
+    PROGRAM_ID
+  );
+
+  const [stakeRecordPda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("stake"),
+      matchIdBN.toArrayLike(Buffer, "le", 8),
+      nftMint.toBuffer(),
+    ],
+    PROGRAM_ID
+  );
+
+  try {
+    const matchPool = await (program.account as any).matchPool.fetch(matchPoolPda);
+    const stake = await (program.account as any).stakeRecord.fetch(stakeRecordPda);
+
+    console.log(`\n=== Your Result for Match #${matchId} ===`);
+    console.log("   Your Prediction:", stake.prediction ? "YES" : "NO");
+    
+    if (!matchPool.resolved) {
+      console.log("   Match Status: ⏳ NOT YET RESOLVED");
+      console.log("   Wait for the match to end and admin to resolve it.");
+      return;
+    }
+
+    console.log("   Match Outcome:", matchPool.outcome ? "YES" : "NO");
+    
+    const isWinner = stake.prediction === matchPool.outcome;
+    
+    if (isWinner) {
+      console.log("\n   🎉🎉🎉 YOU WON! 🎉🎉🎉");
+      if (!stake.claimed) {
+        console.log("   💰 Call claimReward() to get your tGATE + unfreeze your NFT!");
+      } else {
+        console.log("   ✅ You already claimed your reward.");
+      }
+    } else {
+      console.log("\n   😢 You lost this prediction.");
+      if (stake.locked) {
+        console.log("   🔒 Your NFT is still frozen. Admin will unlock it soon.");
+      } else {
+        console.log("   🔓 Your NFT has been unlocked. Better luck next time!");
+      }
+    }
+  } catch (e) {
+    console.log("Could not check result:", e);
   }
 }
 
@@ -302,24 +395,24 @@ async function viewMyStake(matchId: number, nftMint: PublicKey) {
 // EXAMPLE USAGE
 // ===========================================
 
-
 // 1. Stake your NFT on match #1001, betting YES
 // stakeNft(
-//   1001,                                                    // Match ID
-//   new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"),                 // Your NFT mint
-//   "punk",                                                // Tier
-//   1.2,                                                     // Estimated 2.5 SOL value
-//   false                                                     // Prediction: YES wins
+//   11111,                                                    // Match ID
+//   new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"),                  // Your NFT mint
+//   "common",                                                  // Tier
+//   1.5,                                                     // Estimated 2.5 SOL value
+//   true                                                     // Prediction: YES wins
 // );
 
-// 2. After match resolves, claim if you won
-claimReward(1001, new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"));
-
-// 3. Or unstake if you lost
-// unstakeLoser(1001, new PublicKey("YOUR_NFT_MINT_ADDRESS"));
-
-// 4. View your stake
+// 2. View your stake
 // viewMyStake(1001, new PublicKey("YOUR_NFT_MINT_ADDRESS"));
 
+// 3. Check if you won after match resolves
+// checkMyResult(1001, new PublicKey("YOUR_NFT_MINT_ADDRESS"));
 
+// 4. If you WON, claim your reward (NFT gets unfrozen + you get tGATE)
+claimReward(11111, new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"));
 
+// NOTE: If you LOST, you don't need to do anything!
+// The admin will call unlockLoser() for all losers automatically.
+// Your NFT will be unfrozen, but you won't get any tGATE rewards.

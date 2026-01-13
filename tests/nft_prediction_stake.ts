@@ -13,6 +13,25 @@ import {
 import { Keypair, SystemProgram, PublicKey, LAMPORTS_PER_SOL, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { assert } from "chai";
 
+// Metaplex Token Metadata Program ID
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+/**
+ * Derive NFT Edition PDA (Master Edition for Candy Machine NFTs)
+ */
+function getNftEditionPda(nftMint: PublicKey): PublicKey {
+  const [editionPda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("metadata"),
+      TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+      nftMint.toBuffer(),
+      Buffer.from("edition"),
+    ],
+    TOKEN_METADATA_PROGRAM_ID
+  );
+  return editionPda;
+}
+
 describe("nft_prediction_stake", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -41,6 +60,10 @@ describe("nft_prediction_stake", () => {
   let treasuryGateAta: PublicKey;
   let user1GateAta: PublicKey;
   let user2GateAta: PublicKey;
+  
+  // Track user NFT ATAs for unlock
+  let user1NftAta: PublicKey;
+  let user2NftAta: PublicKey;
 
   before(async () => {
     // Create test users
@@ -239,7 +262,7 @@ describe("nft_prediction_stake", () => {
     });
   });
 
-  describe("NFT Staking", () => {
+  describe("NFT Staking (Non-Custodial Freeze/Thaw)", () => {
     it("User1 stakes NFT with YES prediction", async () => {
       // Create user1's NFT token account and mint 1 NFT
       const user1NftAtaAccount = await getOrCreateAssociatedTokenAccount(
@@ -248,7 +271,7 @@ describe("nft_prediction_stake", () => {
         nft1Mint,
         user1.publicKey
       );
-      const user1NftAta = user1NftAtaAccount.address;
+      user1NftAta = user1NftAtaAccount.address;
       
       await mintTo(
         provider.connection,
@@ -279,8 +302,8 @@ describe("nft_prediction_stake", () => {
         program.programId
       );
 
-      // Escrow ATA for NFT
-      const escrowNftAta = getAssociatedTokenAddressSync(nft1Mint, stakeRecordPda, true);
+      // Get NFT Edition PDA (for freeze/thaw)
+      const nftEdition = getNftEditionPda(nft1Mint);
 
       const tx = await program.methods
         .stakeNft(
@@ -294,11 +317,12 @@ describe("nft_prediction_stake", () => {
           userPosition: userPositionPda,
           nftMint: nft1Mint,
           userNftAta: user1NftAta,
-          escrowNftAta: escrowNftAta,
+          nftEdition: nftEdition,
           user: user1.publicKey,
           systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
         })
         .signers([user1])
         .rpc();
@@ -309,6 +333,11 @@ describe("nft_prediction_stake", () => {
       assert.ok(stakeRecord.user.equals(user1.publicKey));
       assert.equal(stakeRecord.prediction, true);
       assert.equal(stakeRecord.locked, true);
+      
+      // NFT should still be in user's wallet (non-custodial)
+      const nftAccount = await getAccount(provider.connection, user1NftAta);
+      assert.equal(nftAccount.amount.toString(), "1");
+      console.log("NFT is frozen in user1's wallet (non-custodial)");
 
       const matchPool = await program.account.matchPool.fetch(matchPoolPda);
       assert.ok(matchPool.totalYesWeight.gt(new BN(0)));
@@ -322,7 +351,7 @@ describe("nft_prediction_stake", () => {
         nft2Mint,
         user2.publicKey
       );
-      const user2NftAta = user2NftAtaAccount.address;
+      user2NftAta = user2NftAtaAccount.address;
       
       await mintTo(
         provider.connection,
@@ -351,7 +380,7 @@ describe("nft_prediction_stake", () => {
         program.programId
       );
 
-      const escrowNftAta = getAssociatedTokenAddressSync(nft2Mint, stakeRecordPda, true);
+      const nftEdition = getNftEditionPda(nft2Mint);
 
       const tx = await program.methods
         .stakeNft(
@@ -365,11 +394,12 @@ describe("nft_prediction_stake", () => {
           userPosition: userPositionPda,
           nftMint: nft2Mint,
           userNftAta: user2NftAta,
-          escrowNftAta: escrowNftAta,
+          nftEdition: nftEdition,
           user: user2.publicKey,
           systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
         })
         .signers([user2])
         .rpc();
@@ -379,6 +409,11 @@ describe("nft_prediction_stake", () => {
       const stakeRecord = await program.account.stakeRecord.fetch(stakeRecordPda);
       assert.ok(stakeRecord.user.equals(user2.publicKey));
       assert.equal(stakeRecord.prediction, false);
+
+      // NFT should still be in user's wallet (non-custodial)
+      const nftAccount = await getAccount(provider.connection, user2NftAta);
+      assert.equal(nftAccount.amount.toString(), "1");
+      console.log("NFT is frozen in user2's wallet (non-custodial)");
 
       const matchPool = await program.account.matchPool.fetch(matchPoolPda);
       assert.ok(matchPool.totalNoWeight.gt(new BN(0)));
@@ -404,7 +439,46 @@ describe("nft_prediction_stake", () => {
       assert.equal(matchPool.outcome, true);
     });
 
-    it("Winner (User1) claims reward + gets NFT back", async () => {
+    it("Admin unlocks loser (User2) NFT", async () => {
+      const [stakeRecordPda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("stake"),
+          matchId.toArrayLike(Buffer, "le", 8),
+          nft2Mint.toBuffer(),
+        ],
+        program.programId
+      );
+
+      const nftEdition = getNftEditionPda(nft2Mint);
+
+      const tx = await program.methods
+        .unlockLoser()
+        .accountsStrict({
+          matchPool: matchPoolPda,
+          stakeRecord: stakeRecordPda,
+          nftMint: nft2Mint,
+          userNftAta: user2NftAta,
+          nftEdition: nftEdition,
+          admin: admin.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+        })
+        .rpc();
+
+      console.log("unlockLoser tx:", tx);
+
+      // Verify NFT is now unfrozen (still in user's wallet)
+      const nftAccount = await getAccount(provider.connection, user2NftAta);
+      assert.equal(nftAccount.amount.toString(), "1");
+
+      // Verify stake record updated
+      const stakeRecord = await program.account.stakeRecord.fetch(stakeRecordPda);
+      assert.equal(stakeRecord.locked, false);
+
+      console.log("User2's NFT unlocked by admin (loser, no reward)");
+    });
+
+    it("Winner (User1) claims reward + gets NFT unfrozen", async () => {
       // Check if prize pool has funds (skip if not funded)
       const matchPool = await program.account.matchPool.fetch(matchPoolPda);
       if (matchPool.prizePool.toNumber() === 0) {
@@ -421,8 +495,7 @@ describe("nft_prediction_stake", () => {
         program.programId
       );
 
-      const user1NftAta = getAssociatedTokenAddressSync(nft1Mint, user1.publicKey);
-      const escrowNftAta = getAssociatedTokenAddressSync(nft1Mint, stakeRecordPda, true);
+      const nftEdition = getNftEditionPda(nft1Mint);
 
       // Create user1's gate ATA before claiming reward
       await getOrCreateAssociatedTokenAccount(
@@ -442,20 +515,21 @@ describe("nft_prediction_stake", () => {
           stakeRecord: stakeRecordPda,
           nftMint: nft1Mint,
           userNftAta: user1NftAta,
-          escrowNftAta: escrowNftAta,
+          nftEdition: nftEdition,
           treasury: treasuryPda,
           gateMint: gateMint,
           treasuryGateAta: treasuryGateAta,
           userGateAta: user1GateAta,
           user: user1.publicKey,
           tokenProgram: TOKEN_PROGRAM_ID,
+          tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
         })
         .signers([user1])
         .rpc();
 
       console.log("claimReward tx:", tx);
 
-      // Verify NFT returned
+      // Verify NFT is still in user's wallet (non-custodial) and now unfrozen
       const nftAccount = await getAccount(provider.connection, user1NftAta);
       assert.equal(nftAccount.amount.toString(), "1");
 
@@ -468,46 +542,8 @@ describe("nft_prediction_stake", () => {
       const stakeRecord = await program.account.stakeRecord.fetch(stakeRecordPda);
       assert.equal(stakeRecord.claimed, true);
       assert.equal(stakeRecord.locked, false);
-    });
 
-    it("Loser (User2) unstakes NFT (no reward)", async () => {
-      const [stakeRecordPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("stake"),
-          matchId.toArrayLike(Buffer, "le", 8),
-          nft2Mint.toBuffer(),
-        ],
-        program.programId
-      );
-
-      const user2NftAta = getAssociatedTokenAddressSync(nft2Mint, user2.publicKey);
-      const escrowNftAta = getAssociatedTokenAddressSync(nft2Mint, stakeRecordPda, true);
-
-      const tx = await program.methods
-        .unstakeLoser()
-        .accountsStrict({
-          matchPool: matchPoolPda,
-          stakeRecord: stakeRecordPda,
-          nftMint: nft2Mint,
-          userNftAta: user2NftAta,
-          escrowNftAta: escrowNftAta,
-          user: user2.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([user2])
-        .rpc();
-
-      console.log("unstakeLoser tx:", tx);
-
-      // Verify NFT returned
-      const nftAccount = await getAccount(provider.connection, user2NftAta);
-      assert.equal(nftAccount.amount.toString(), "1");
-
-      // Verify stake record updated
-      const stakeRecord = await program.account.stakeRecord.fetch(stakeRecordPda);
-      assert.equal(stakeRecord.locked, false);
-
-      console.log("User2 got NFT back but no reward (loser)");
+      console.log("User1 claimed reward and NFT is now unfrozen");
     });
   });
 
@@ -533,7 +569,7 @@ describe("nft_prediction_stake", () => {
         [Buffer.from("user_position"), matchId.toArrayLike(Buffer, "le", 8), user1.publicKey.toBuffer()],
         program.programId
       );
-      const escrowNftAta = getAssociatedTokenAddressSync(nft3Mint, stakeRecordPda, true);
+      const nftEdition = getNftEditionPda(nft3Mint);
 
       try {
         await program.methods
@@ -544,11 +580,12 @@ describe("nft_prediction_stake", () => {
             userPosition: userPositionPda,
             nftMint: nft3Mint,
             userNftAta: user1Nft3Ata,
-            escrowNftAta: escrowNftAta,
+            nftEdition: nftEdition,
             user: user1.publicKey,
             systemProgram: SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
           })
           .signers([user1])
           .rpc();
