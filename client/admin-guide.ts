@@ -385,7 +385,7 @@ async function viewMatchPool(matchId: number) {
 
 // === ACTION FUNCTIONS ===
 // initializeTreasury();         // Run this FIRST!
-// createMatchPool(470019, 2);     // Create match #1001, max 3 NFTs per user
-fundMatchPool(470019, 100);     // Fund match #1001 with 100 tGATE
+// createMatchPool(470023, 2);     // Create match #1001, max 3 NFTs per user
+fundMatchPool(470023, 100);     // Fund match #1001 with 100 tGATE
 // resolveMatch(470019, true);     // Resolve match #1001: YES wins
 // viewMatchPool(470019);          // View match #1001 details
