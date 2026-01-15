@@ -618,15 +618,15 @@ async function resolveAndUnlockLosers(matchId: number, outcome: boolean) {
 
 // === QUERY FUNCTIONS (Read-only) ===
 // getTreasuryAdmin();           // Who is the treasury admin?
-// getMatchAdmin(1001);          // Who is the admin of match #1001?
-// checkAllAdmins(1001);          // Check your permissions for match #1001
-// getMatchStakeRecords(1001);   // View all stakes and find losers to unlock
+// getMatchAdmin(470050);          // Who is the admin of match #1001?
+// checkAllAdmins(470050);          // Check your permissions for match #1001
+// getMatchStakeRecords(470050);   // View all stakes and find losers to unlock
 
 // === ACTION FUNCTIONS ===
 // initializeTreasury();         // Run this FIRST!
-// createMatchPool(11111, 3);     // Create match #1001, max 3 NFTs per user
-// fundMatchPool(11111, 100);     // Fund match #1001 with 100 tGATE
-// resolveMatch(11111, true);     // Resolve match #1001: YES wins
+// createMatchPool(470050, 3);     // Create match #1001, max 3 NFTs per user
+// fundMatchPool(470050, 100);     // Fund match #1001 with 100 tGATE
+// resolveMatch(470050, true);     // Resolve match #1001: YES wins
 // viewMatchPool(470050);          // View match #1001 details
 
 // === NEW: Unlock Losers' NFTs ===
@@ -637,4 +637,4 @@ async function resolveAndUnlockLosers(matchId: number, outcome: boolean) {
 // );
 
 // === FULL WORKFLOW: Resolve + Unlock all losers ===
-resolveAndUnlockLosers(11111, true);  // Resolve as YES wins + unlock all losers
+resolveAndUnlockLosers(470050, true);  // Resolve as YES wins + unlock all losers

@@ -26,35 +26,12 @@ pub mod nft_prediction_stake_v1 {
         Ok(())
     }
 
-    // 2) Create a match pool PDA (admin = creator)
-    pub fn init_match_pool(
-        ctx: Context<InitMatchPool>,
-        match_id: u64,
-        max_nfts_per_user: u8,
-    ) -> Result<()> {
-        require!(max_nfts_per_user > 0, ErrorCode::InvalidMaxPerUser);
-
-        let pool = &mut ctx.accounts.match_pool;
-        pool.match_id = match_id;
-        pool.admin = ctx.accounts.admin.key();
-        pool.prize_pool = 0;
-        pool.total_yes_weight = 0;
-        pool.total_no_weight = 0;
-        pool.resolved = false;
-        pool.outcome = false;
-        pool.max_nfts_per_user = max_nfts_per_user;
-        pool.bump = ctx.bumps.match_pool;
-        Ok(())
-    }
-
-    // 3) Fund a match prize pool with tGATE
-    pub fn fund_match_pool(ctx: Context<FundMatchPool>, amount: u64) -> Result<()> {
-        let pool = &mut ctx.accounts.match_pool;
-        let treasury = &ctx.accounts.treasury;
-
-        require!(!pool.resolved, ErrorCode::MatchResolved);
-        require!(pool.admin == ctx.accounts.admin.key(), ErrorCode::NotMatchAdmin);
-        require!(treasury.admin == ctx.accounts.admin.key(), ErrorCode::NotTreasuryAdmin);
+    // 2) Refill treasury with tGATE (admin can call anytime)
+    pub fn refill_treasury(ctx: Context<RefillTreasury>, amount: u64) -> Result<()> {
+        require!(
+            ctx.accounts.treasury.admin == ctx.accounts.admin.key(),
+            ErrorCode::NotTreasuryAdmin
+        );
         require!(amount > 0, ErrorCode::InvalidAmount);
 
         token::transfer(
@@ -69,14 +46,42 @@ pub mod nft_prediction_stake_v1 {
             amount,
         )?;
 
-        pool.prize_pool = pool
-            .prize_pool
-            .checked_add(amount)
-            .ok_or(ErrorCode::MathOverflow)?;
+        msg!("Treasury refilled with {} tGATE", amount);
+        Ok(())
+    }
+
+    // 3) Create a match pool PDA (state only - no tokens held)
+    // prize_pool is just a number representing reward amount for this match
+    pub fn init_match_pool(
+        ctx: Context<InitMatchPool>,
+        match_id: u64,
+        prize_pool: u64,
+        max_nfts_per_user: u8,
+    ) -> Result<()> {
+        require!(max_nfts_per_user > 0, ErrorCode::InvalidMaxPerUser);
+        require!(prize_pool > 0, ErrorCode::InvalidAmount);
+
+        let pool = &mut ctx.accounts.match_pool;
+        pool.match_id = match_id;
+        pool.admin = ctx.accounts.admin.key();
+        pool.prize_pool = prize_pool; // State only - no token movement
+        pool.total_yes_weight = 0;
+        pool.total_no_weight = 0;
+        pool.resolved = false;
+        pool.outcome = false;
+        pool.max_nfts_per_user = max_nfts_per_user;
+        pool.bump = ctx.bumps.match_pool;
+
+        msg!(
+            "Match pool #{} created. Prize: {} tGATE (state only)",
+            match_id,
+            prize_pool
+        );
         Ok(())
     }
 
     // 4) Stake NFT: Approve delegate + Freeze (non-custodial lock)
+    // No token movement - state only records the stake weight
     pub fn stake_nft(
         ctx: Context<StakeNft>,
         tier: Tier,
@@ -453,10 +458,7 @@ pub struct InitMatchPool<'info> {
 }
 
 #[derive(Accounts)]
-pub struct FundMatchPool<'info> {
-    #[account(mut)]
-    pub match_pool: Account<'info, MatchPool>,
-
+pub struct RefillTreasury<'info> {
     #[account(seeds = [b"treasury"], bump = treasury.bump)]
     pub treasury: Account<'info, Treasury>,
 
