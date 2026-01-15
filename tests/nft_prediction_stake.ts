@@ -181,26 +181,8 @@ describe("nft_prediction_stake", () => {
       assert.ok(treasury.gateMint.equals(gateMint));
     });
 
-    it("Initialize match pool", async () => {
-      const tx = await program.methods
-        .initMatchPool(matchId, 3)
-        .accountsStrict({
-          matchPool: matchPoolPda,
-          admin: admin.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
-
-      console.log("initMatchPool tx:", tx);
-
-      const matchPool = await program.account.matchPool.fetch(matchPoolPda);
-      assert.ok(matchPool.matchId.eq(matchId));
-      assert.equal(matchPool.maxNftsPerUser, 3);
-      assert.equal(matchPool.prizePool.toNumber(), 0);
-    });
-
-    it("Fund match pool with tGATE", async () => {
-      const prizeAmount = new BN(1000_000_000_000); // 1000 tGATE
+    it("Refill treasury with tGATE", async () => {
+      const refillAmount = new BN(1000_000_000_000); // 1000 tGATE
 
       // Ensure treasury ATA exists
       await getOrCreateAssociatedTokenAccount(
@@ -212,7 +194,6 @@ describe("nft_prediction_stake", () => {
       );
 
       // Check if we're the mint authority (can only mint if treasury is new)
-      const mintInfo = await provider.connection.getAccountInfo(gateMint);
       let canMint = false;
       
       try {
@@ -231,18 +212,17 @@ describe("nft_prediction_stake", () => {
           gateMint,
           adminGateAta,
           admin,
-          BigInt(prizeAmount.toString())
+          BigInt(refillAmount.toString())
         );
         canMint = true;
       } catch (e) {
-        console.log("Cannot mint (not mint authority), skipping fund test");
+        console.log("Cannot mint (not mint authority), skipping refill test");
         return; // Skip this test if we can't mint
       }
 
       const tx = await program.methods
-        .fundMatchPool(prizeAmount)
+        .refillTreasury(refillAmount)
         .accountsStrict({
-          matchPool: matchPoolPda,
           treasury: treasuryPda,
           gateMint: gateMint,
           treasuryGateAta: treasuryGateAta,
@@ -252,13 +232,32 @@ describe("nft_prediction_stake", () => {
         })
         .rpc();
 
-      console.log("fundMatchPool tx:", tx);
-
-      const matchPool = await program.account.matchPool.fetch(matchPoolPda);
-      assert.ok(matchPool.prizePool.eq(prizeAmount));
+      console.log("refillTreasury tx:", tx);
 
       const treasuryBalance = await getAccount(provider.connection, treasuryGateAta);
-      assert.equal(treasuryBalance.amount.toString(), prizeAmount.toString());
+      console.log("Treasury balance:", treasuryBalance.amount.toString());
+      assert.ok(BigInt(treasuryBalance.amount.toString()) >= BigInt(refillAmount.toString()));
+    });
+
+    it("Initialize match pool (state only - no token movement)", async () => {
+      const prizePool = new BN(1000_000_000_000); // 1000 tGATE prize (state only)
+      
+      const tx = await program.methods
+        .initMatchPool(matchId, prizePool, 3)
+        .accountsStrict({
+          matchPool: matchPoolPda,
+          admin: admin.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      console.log("initMatchPool tx:", tx);
+
+      const matchPool = await program.account.matchPool.fetch(matchPoolPda);
+      assert.ok(matchPool.matchId.eq(matchId));
+      assert.equal(matchPool.maxNftsPerUser, 3);
+      assert.ok(matchPool.prizePool.eq(prizePool)); // Prize pool is set (state only)
+      console.log("Match pool created with prize:", prizePool.toString(), "tGATE (state only)");
     });
   });
 

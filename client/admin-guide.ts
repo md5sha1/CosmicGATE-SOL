@@ -1,10 +1,15 @@
 /**
  * CosmicGATE NFT Prediction Staking - Admin Guide
  * 
+ * SINGLE TREASURY MODEL:
+ * - ONE Treasury PDA holds all tGATE tokens (e.g., 1,000,000 tGATE)
+ * - Match pools are STATE ONLY (no token accounts per match)
+ * - Winners claim directly from Treasury PDA
+ * 
  * This script shows how to:
  * 1. Initialize treasury with your REAL tGATE token
- * 2. Create prediction match pools
- * 3. Fund match pools with tGATE prizes
+ * 2. Refill treasury with tGATE (can do anytime when depleted)
+ * 3. Create prediction match pools (state only - prize_pool is just a number)
  * 4. Resolve matches
  * 5. Unlock losers' NFTs (non-custodial freeze/thaw model)
  */
@@ -93,16 +98,13 @@ async function checkAllAdmins(matchId: number) {
   console.log("You are Treasury Admin:", treasuryAdmin === admin.publicKey.toBase58() ? "✅ YES" : "❌ NO");
   console.log("You are Match Admin:", matchAdmin === admin.publicKey.toBase58() ? "✅ YES" : "❌ NO");
   
-  if (treasuryAdmin === admin.publicKey.toBase58() && matchAdmin === admin.publicKey.toBase58()) {
-    console.log("\n You CAN fund this match!");
-  } else {
-    console.log("\n You CANNOT fund this match.");
-    if (treasuryAdmin !== admin.publicKey.toBase58()) {
-      console.log("   - You are not the treasury admin");
-    }
-    if (matchAdmin !== admin.publicKey.toBase58()) {
-      console.log("   - You are not the match admin");
-    }
+  console.log("\n=== What you can do ===");
+  if (treasuryAdmin === admin.publicKey.toBase58()) {
+    console.log("✅ Refill treasury with tGATE");
+  }
+  if (matchAdmin === admin.publicKey.toBase58()) {
+    console.log("✅ Resolve this match");
+    console.log("✅ Unlock losers' NFTs");
   }
 }
 
@@ -252,49 +254,14 @@ async function initializeTreasury() {
 }
 
 /**
- * Step 2: Create a Match Pool
- * Call this for each esports match you want to create
+ * Step 2: Refill Treasury with tGATE
+ * Admin can call this anytime to add more tGATE to the treasury
+ * The treasury holds ALL rewards - match pools don't hold tokens
  */
-async function createMatchPool(matchId: number, maxNftsPerUser: number = 3) {
+async function refillTreasury(amountTGATE: number) {
   const { provider, admin } = getProvider();
   const program = getProgram(provider);
 
-  const matchIdBN = new BN(matchId);
-  
-  const [matchPoolPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
-    PROGRAM_ID
-  );
-
-  console.log(`Creating match pool #${matchId}...`);
-
-  const tx = await program.methods
-    .initMatchPool(matchIdBN, maxNftsPerUser)
-    .accountsStrict({
-      matchPool: matchPoolPda,
-      admin: admin.publicKey,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
-
-  console.log(" Match pool created!");
-  console.log("   Match ID:", matchId);
-  console.log("   Match Pool PDA:", matchPoolPda.toBase58());
-  console.log("   Max NFTs per user:", maxNftsPerUser);
-  console.log("   Transaction:", tx);
-  
-  return matchPoolPda;
-}
-
-/**
- * Step 3: Fund a Match Pool with tGATE prizes
- * You need tGATE in your wallet to do this
- */
-async function fundMatchPool(matchId: number, amountTGATE: number) {
-  const { provider, admin } = getProvider();
-  const program = getProgram(provider);
-
-  const matchIdBN = new BN(matchId);
   // CHANGE THIS based on your tGATE decimals:
   // - 9 decimals: multiply by 1_000_000_000
   // - 6 decimals: multiply by 1_000_000
@@ -306,21 +273,15 @@ async function fundMatchPool(matchId: number, amountTGATE: number) {
     [Buffer.from("treasury")],
     PROGRAM_ID
   );
-  
-  const [matchPoolPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
-    PROGRAM_ID
-  );
 
   const adminGateAta = getAssociatedTokenAddressSync(TGATE_MINT, admin.publicKey);
   const treasuryGateAta = getAssociatedTokenAddressSync(TGATE_MINT, treasuryPda, true);
 
-  console.log(`Funding match #${matchId} with ${amountTGATE} tGATE...`);
+  console.log(`Refilling treasury with ${amountTGATE} tGATE...`);
 
   const tx = await program.methods
-    .fundMatchPool(amount)
+    .refillTreasury(amount)
     .accountsStrict({
-      matchPool: matchPoolPda,
       treasury: treasuryPda,
       gateMint: TGATE_MINT,
       treasuryGateAta: treasuryGateAta,
@@ -330,9 +291,61 @@ async function fundMatchPool(matchId: number, amountTGATE: number) {
     })
     .rpc();
 
-  console.log("   Match pool funded!");
+  console.log("✅ Treasury refilled!");
   console.log("   Amount:", amountTGATE, "tGATE");
   console.log("   Transaction:", tx);
+  
+  // Show new balance
+  const treasuryBalance = await provider.connection.getTokenAccountBalance(treasuryGateAta);
+  console.log("   Treasury balance:", treasuryBalance.value.uiAmount, "tGATE");
+}
+
+/**
+ * Step 3: Create a Match Pool (STATE ONLY - no token movement!)
+ * 
+ * The prize_pool is just a NUMBER representing how much tGATE winners will share.
+ * No tokens are moved or locked per match - Treasury holds all funds.
+ * 
+ * Prize pool examples:
+ * - Regular game: 100 tGATE
+ * - Playoffs: 10,000 tGATE
+ * - Finals: 50,000 tGATE
+ */
+async function createMatchPool(matchId: number, prizePoolTGATE: number, maxNftsPerUser: number = 3) {
+  const { provider, admin } = getProvider();
+  const program = getProgram(provider);
+
+  const matchIdBN = new BN(matchId);
+  
+  // CHANGE THIS based on your tGATE decimals
+  const TGATE_DECIMALS = 6;
+  const prizePool = new BN(prizePoolTGATE * Math.pow(10, TGATE_DECIMALS));
+  
+  const [matchPoolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("match_pool"), matchIdBN.toArrayLike(Buffer, "le", 8)],
+    PROGRAM_ID
+  );
+
+  console.log(`Creating match pool #${matchId}...`);
+  console.log(`   Prize Pool: ${prizePoolTGATE} tGATE (state only - no token movement)`);
+
+  const tx = await program.methods
+    .initMatchPool(matchIdBN, prizePool, maxNftsPerUser)
+    .accountsStrict({
+      matchPool: matchPoolPda,
+      admin: admin.publicKey,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  console.log("✅ Match pool created!");
+  console.log("   Match ID:", matchId);
+  console.log("   Match Pool PDA:", matchPoolPda.toBase58());
+  console.log("   Prize Pool:", prizePoolTGATE, "tGATE (state only)");
+  console.log("   Max NFTs per user:", maxNftsPerUser);
+  console.log("   Transaction:", tx);
+  
+  return matchPoolPda;
 }
 
 /**
@@ -555,6 +568,32 @@ async function getMatchStakeRecords(matchId: number) {
 }
 
 /**
+ * View treasury balance
+ */
+async function viewTreasuryBalance() {
+  const { provider } = getProvider();
+  
+  const [treasuryPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("treasury")],
+    PROGRAM_ID
+  );
+  
+  const treasuryGateAta = getAssociatedTokenAddressSync(TGATE_MINT, treasuryPda, true);
+
+  try {
+    const balance = await provider.connection.getTokenAccountBalance(treasuryGateAta);
+    console.log("\n=== Treasury Balance ===");
+    console.log("   Treasury PDA:", treasuryPda.toBase58());
+    console.log("   tGATE Balance:", balance.value.uiAmount, "tGATE");
+    console.log("   Raw Amount:", balance.value.amount);
+    return balance.value.uiAmount;
+  } catch (e) {
+    console.log("Treasury not funded yet or ATA doesn't exist");
+    return 0;
+  }
+}
+
+/**
  * View match pool status
  */
 async function viewMatchPool(matchId: number) {
@@ -574,12 +613,15 @@ async function viewMatchPool(matchId: number) {
     console.log(`\n=== Match Pool #${matchId} ===`);
     console.log("   PDA:", matchPoolPda.toBase58());
     console.log("   Admin:", matchPool.admin.toBase58());
-    console.log("   Prize Pool:", matchPool.prizePool.toNumber() / 1_000_000, "tGATE");
+    console.log("   Prize Pool:", matchPool.prizePool.toNumber() / 1_000_000, "tGATE (state only)");
     console.log("   Total YES Weight:", matchPool.totalYesWeight.toString());
     console.log("   Total NO Weight:", matchPool.totalNoWeight.toString());
     console.log("   Resolved:", matchPool.resolved);
-    console.log("   Outcome:", matchPool.outcome ? "YES" : "NO");
+    if (matchPool.resolved) {
+      console.log("   Outcome:", matchPool.outcome ? "🎉 YES WINS" : "🎉 NO WINS");
+    }
     console.log("   Max NFTs per user:", matchPool.maxNftsPerUser);
+    console.log("\n   📌 Note: Prize pool is STATE ONLY. Rewards paid from Treasury PDA.");
   } catch (e) {
     console.log(`Match pool #${matchId} not found`);
   }
@@ -594,7 +636,7 @@ async function resolveAndUnlockLosers(matchId: number, outcome: boolean) {
   console.log(`\n=== Full Match Resolution Workflow for Match #${matchId} ===`);
   
   // Step 1: Resolve the match
-  await resolveMatch(matchId, outcome);
+  // await resolveMatch(matchId, outcome);
   
   // Step 2: Get all losers that need unlocking
   const losersToUnlock = await getMatchStakeRecords(matchId);
@@ -618,23 +660,30 @@ async function resolveAndUnlockLosers(matchId: number, outcome: boolean) {
 
 // === QUERY FUNCTIONS (Read-only) ===
 // getTreasuryAdmin();           // Who is the treasury admin?
-// getMatchAdmin(470050);          // Who is the admin of match #1001?
-// checkAllAdmins(470050);          // Check your permissions for match #1001
-// getMatchStakeRecords(470050);   // View all stakes and find losers to unlock
+// viewTreasuryBalance();        // Check treasury tGATE balance
+// getMatchAdmin(470050);          // Who is the admin of match #470050?
+// checkAllAdmins(470050);          // Check your permissions for match #470050
+// getMatchStakeRecords(120050);   // View all stakes and find losers to unlock
+// viewMatchPool(470050);          // View match #470050 details
 
-// === ACTION FUNCTIONS ===
-// initializeTreasury();         // Run this FIRST!
-// createMatchPool(470050, 3);     // Create match #1001, max 3 NFTs per user
-// fundMatchPool(470050, 100);     // Fund match #1001 with 100 tGATE
-// resolveMatch(470050, true);     // Resolve match #1001: YES wins
-// viewMatchPool(470050);          // View match #1001 details
+// === SETUP (Run once) ===
+// initializeTreasury();              // Initialize treasury PDA
+// refillTreasury(500);         // Fund treasury with 1M tGATE
 
-// === NEW: Unlock Losers' NFTs ===
+// === MATCH CREATION (State only - no token movement!) ===
+// createMatchPool(120050, 100, 3);   // Create match #470050, prize=100 tGATE, max 3 NFTs/user
+// createMatchPool(470051, 10_000, 5); // Playoffs match, prize=10,000 tGATE
+// createMatchPool(470052, 50_000, 5); // Finals match, prize=50,000 tGATE
+
+// === RESOLUTION ===
+// resolveMatch(120050, true);        // Resolve match #470050: YES wins
+
+// === UNLOCK LOSERS' NFTs ===
 // unlockLoser(
-//   470019,
-//   new PublicKey("LOSER_NFT_MINT_ADDRESS"),
-//   new PublicKey("LOSER_USER_NFT_ATA")
+//   120050,
+//   new PublicKey("GVxXZJ5sqNwe7NiHonq3eX9i5LTZNW3FVPTr2cbwgkxR"),
+//   new PublicKey("9zCwQhzn6T8ypeXaDNUgVXtPxiqchfAyfTBc2urswFaq")
 // );
 
 // === FULL WORKFLOW: Resolve + Unlock all losers ===
-resolveAndUnlockLosers(470050, true);  // Resolve as YES wins + unlock all losers
+resolveAndUnlockLosers(120050, true);  // Resolve as YES wins + unlock all losers

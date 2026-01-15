@@ -5,9 +5,14 @@
  * Your NFT stays in YOUR wallet! It's "frozen" while staked (can't transfer/sell),
  * but it never leaves your possession.
  * 
+ * SINGLE TREASURY MODEL:
+ * - All rewards are paid from ONE Treasury PDA
+ * - Match pools are state-only (prize_pool is just a number)
+ * - When you claim, tGATE transfers from Treasury → Your wallet
+ * 
  * This script shows how users can:
  * 1. Stake their NFT on a match prediction (NFT gets frozen in your wallet)
- * 2. Claim rewards if they win (NFT gets thawed + you get tGATE rewards)
+ * 2. Claim rewards if they win (NFT gets thawed + you get tGATE from Treasury)
  * 3. Wait for admin to unlock if they lose (NFT gets thawed, no rewards)
  */
 
@@ -185,11 +190,13 @@ async function stakeNft(
 
 /**
  * Claim rewards (if you won)
- * This THAWS your NFT AND gives you tGATE rewards
+ * This THAWS your NFT AND transfers tGATE from Treasury → Your wallet
  * 
  * Only winners can call this. After claiming:
  * - Your NFT is unfrozen (can transfer/sell again)
  * - You receive your tGATE reward based on your weight
+ * 
+ * Reward formula: (your_weight / total_winning_weight) × prize_pool
  */
 async function claimReward(matchId: number, nftMint: PublicKey) {
   const { provider, user } = getProvider();
@@ -326,6 +333,7 @@ async function viewMatchPool(matchId: number) {
       console.log("   Outcome:", matchPool.outcome ? "🎉 YES WINS" : "🎉 NO WINS");
     }
     console.log("   Max NFTs per user:", matchPool.maxNftsPerUser);
+    console.log("\n   Rewards paid from Treasury PDA when you claim!");
   } catch (e) {
     console.log(`Match pool #${matchId} not found`);
   }
@@ -397,11 +405,11 @@ async function checkMyResult(matchId: number, nftMint: PublicKey) {
 
 // 1. Stake your NFT on match #1001, betting YES
 // stakeNft(
-//   11111,                                                    // Match ID
+//   120050,                                                    // Match ID
 //   new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"),                  // Your NFT mint
-//   "common",                                                  // Tier
+//   "legend",                                                  // Tier
 //   1.5,                                                     // Estimated 2.5 SOL value
-//   true                                                     // Prediction: YES wins
+//   false                                                     // Prediction: YES wins
 // );
 
 // 2. View your stake
@@ -411,7 +419,7 @@ async function checkMyResult(matchId: number, nftMint: PublicKey) {
 // checkMyResult(1001, new PublicKey("YOUR_NFT_MINT_ADDRESS"));
 
 // 4. If you WON, claim your reward (NFT gets unfrozen + you get tGATE)
-claimReward(11111, new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"));
+claimReward(120050, new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"));
 
 // NOTE: If you LOST, you don't need to do anything!
 // The admin will call unlockLoser() for all losers automatically.
