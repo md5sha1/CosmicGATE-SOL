@@ -123,6 +123,8 @@ const RPC_URL = "https://api.devnet.solana.com";
 
 // Path to your wallet keypair
 const WALLET_PATH = os.homedir() + "/.config/solana/id.json";
+// const WALLET_PATH = "./wallet.json";
+
 
 // ===========================================
 // HELPER: Load wallet and create provider
@@ -298,6 +300,44 @@ async function refillTreasury(amountTGATE: number) {
   // Show new balance
   const treasuryBalance = await provider.connection.getTokenAccountBalance(treasuryGateAta);
   console.log("   Treasury balance:", treasuryBalance.value.uiAmount, "tGATE");
+}
+
+/**
+ * Step 2.5: Transfer Treasury Admin to a New Address
+ * ONLY the current treasury admin can call this function!
+ * 
+ * WARNING: After this, YOU will lose admin access. Make sure the new admin address is correct!
+ * 
+ * @param newAdminAddress - The public key of the new admin (as base58 string)
+ */
+async function transferTreasuryAdmin(newAdminAddress: string) {
+  const { provider, admin } = getProvider();
+  const program = getProgram(provider);
+
+  const newAdmin = new PublicKey(newAdminAddress);
+
+  const [treasuryPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("treasury")],
+    PROGRAM_ID
+  );
+
+  console.log("=== Transfer Treasury Admin ===");
+  console.log("   Current Admin:", admin.publicKey.toBase58());
+  console.log("   New Admin:", newAdmin.toBase58());
+  console.log("\n⚠️  WARNING: You will lose admin access after this transaction!");
+
+  const tx = await program.methods
+    .transferTreasuryAdmin(newAdmin)
+    .accountsStrict({
+      treasury: treasuryPda,
+      admin: admin.publicKey,
+    })
+    .rpc();
+
+  console.log("\n✅ Treasury admin transferred!");
+  console.log("   Transaction:", tx);
+  console.log("   New Admin:", newAdmin.toBase58());
+  console.log("\n📌 Note: The old admin can no longer refill treasury or transfer admin.");
 }
 
 /**
@@ -572,6 +612,7 @@ async function getMatchStakeRecords(matchId: number) {
  */
 async function viewTreasuryBalance() {
   const { provider } = getProvider();
+  console.log("provider wallet path:", WALLET_PATH);
   
   const [treasuryPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("treasury")],
@@ -636,7 +677,7 @@ async function resolveAndUnlockLosers(matchId: number, outcome: boolean) {
   console.log(`\n=== Full Match Resolution Workflow for Match #${matchId} ===`);
   
   // Step 1: Resolve the match
-  // await resolveMatch(matchId, outcome);
+  await resolveMatch(matchId, outcome);
   
   // Step 2: Get all losers that need unlocking
   const losersToUnlock = await getMatchStakeRecords(matchId);
@@ -668,7 +709,10 @@ async function resolveAndUnlockLosers(matchId: number, outcome: boolean) {
 
 // === SETUP (Run once) ===
 // initializeTreasury();              // Initialize treasury PDA
-// refillTreasury(500);         // Fund treasury with 1M tGATE
+// refillTreasury(500);               // Fund treasury with 500 tGATE
+
+// === TRANSFER ADMIN (Use with caution!) ===
+transferTreasuryAdmin("G4XuMEx4hy49JQf4vys61bbxt4XXjNd97h6Wga2ggi3k");  // Transfer treasury admin to new address
 
 // === MATCH CREATION (State only - no token movement!) ===
 // createMatchPool(120050, 100, 3);   // Create match #470050, prize=100 tGATE, max 3 NFTs/user
@@ -686,4 +730,4 @@ async function resolveAndUnlockLosers(matchId: number, outcome: boolean) {
 // );
 
 // === FULL WORKFLOW: Resolve + Unlock all losers ===
-resolveAndUnlockLosers(120050, true);  // Resolve as YES wins + unlock all losers
+// resolveAndUnlockLosers(470053, true);  // Resolve as YES wins + unlock all losers

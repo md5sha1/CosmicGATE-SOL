@@ -405,11 +405,11 @@ async function checkMyResult(matchId: number, nftMint: PublicKey) {
 
 // 1. Stake your NFT on match #1001, betting YES
 // stakeNft(
-//   120050,                                                    // Match ID
-//   new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"),                  // Your NFT mint
+//   470055,                                                    // Match ID
+//   new PublicKey("GVxXZJ5sqNwe7NiHonq3eX9i5LTZNW3FVPTr2cbwgkxR"),                  // Your NFT mint
 //   "legend",                                                  // Tier
 //   1.5,                                                     // Estimated 2.5 SOL value
-//   false                                                     // Prediction: YES wins
+//   true                                                     // Prediction: YES wins
 // );
 
 // 2. View your stake
@@ -419,7 +419,7 @@ async function checkMyResult(matchId: number, nftMint: PublicKey) {
 // checkMyResult(1001, new PublicKey("YOUR_NFT_MINT_ADDRESS"));
 
 // 4. If you WON, claim your reward (NFT gets unfrozen + you get tGATE)
-claimReward(120050, new PublicKey("9VKTgd9q5dyTDRumHMqP6iocyxhx6sbCXGQFgu4PKajC"));
+claimReward(470055, new PublicKey("GVxXZJ5sqNwe7NiHonq3eX9i5LTZNW3FVPTr2cbwgkxR"));
 
 // NOTE: If you LOST, you don't need to do anything!
 // The admin will call unlockLoser() for all losers automatically.

@@ -50,6 +50,27 @@ pub mod nft_prediction_stake_v1 {
         Ok(())
     }
 
+    // 2.5) Transfer treasury admin to a new address (current admin only)
+    pub fn transfer_treasury_admin(
+        ctx: Context<TransferTreasuryAdmin>,
+        new_admin: Pubkey,
+    ) -> Result<()> {
+        require!(
+            ctx.accounts.treasury.admin == ctx.accounts.admin.key(),
+            ErrorCode::NotTreasuryAdmin
+        );
+        
+        let old_admin = ctx.accounts.treasury.admin;
+        ctx.accounts.treasury.admin = new_admin;
+        
+        msg!(
+            "Treasury admin transferred from {} to {}",
+            old_admin,
+            new_admin
+        );
+        Ok(())
+    }
+
     // 3) Create a match pool PDA (state only - no tokens held)
     // prize_pool is just a number representing reward amount for this match
     pub fn init_match_pool(
@@ -474,6 +495,15 @@ pub struct RefillTreasury<'info> {
     pub admin_gate_ata: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct TransferTreasuryAdmin<'info> {
+    #[account(mut, seeds = [b"treasury"], bump = treasury.bump)]
+    pub treasury: Account<'info, Treasury>,
+
+    #[account(mut)]
+    pub admin: Signer<'info>,
 }
 
 #[derive(Accounts)]
