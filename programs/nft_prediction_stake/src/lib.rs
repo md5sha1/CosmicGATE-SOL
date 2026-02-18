@@ -8,7 +8,22 @@ use mpl_token_metadata::instructions::{
     ThawDelegatedAccountCpi, ThawDelegatedAccountCpiAccounts,
 };
 
+#[cfg(not(feature = "no-entrypoint"))]
+use solana_security_txt::security_txt;
+
 declare_id!("51DFYj5Evdk3TnbipTmscxwt4HvJiYq5d3cfdriEEvqm");
+
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+    name: "CosmicGATE NFT Prediction Stake",
+    project_url: "https://github.com/md5sha1/CosmicGATE-SOL",
+    contacts: "link:https://github.com/md5sha1/CosmicGATE-SOL/security/advisories",
+    policy: "https://github.com/md5sha1/CosmicGATE-SOL/blob/main/SECURITY.md",
+    preferred_languages: "en",
+    source_code: "https://github.com/md5sha1/CosmicGATE-SOL",
+    source_revision: "main",
+    auditors: "N/A"
+}
 
 // ----------------------------
 // Program
